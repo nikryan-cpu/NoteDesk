@@ -1,0 +1,45 @@
+name: Publish release
+
+# Release builds land in a draft. Once the installers are checked, this publishes the
+# draft for a tag and fills in the notes from CHANGELOG.md.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag of the draft release, e.g. v1.0.0
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract release notes
+        run: |
+          version="${TAG#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { on = 1; next }
+            on && /^## \[/ { exit }
+            on && /^\[[^]]+\]: / { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          test -s notes.md
+          cat >> notes.md <<NOTES
+          ### Install
+          - **Windows:** \`NoteDesk-${version}-Setup.exe\` installs NoteDesk and adds desktop and Start menu shortcuts; \`NoteDesk-${version}-Portable.exe\` runs without installing. The builds aren't code-signed, so SmartScreen will ask: *More info → Run anyway*.
+          - **macOS:** \`NoteDesk-${version}-universal.dmg\`. After copying the app to Applications run \`xattr -cr /Applications/NoteDesk.app\` (the build isn't notarized).
+          - **Linux:** \`NoteDesk-${version}-x86_64.AppImage\` (\`chmod +x\` first) or \`notedesk_${version}_amd64.deb\`.
+
+          Unofficial app, not affiliated with Google.
+          NOTES
+          cat notes.md
+
+      - name: Publish
+        run: gh release edit "$TAG" --draft=false --latest --title "NoteDesk ${TAG#v}" --notes-file notes.md
