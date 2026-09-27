@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.0] - 2026-09-27
+
+### Added
+- Ask window (`Ctrl+Alt+Space`, replaces Quick Ask): one prompt to Gemini, Claude, ChatGPT,
+  DeepSeek or Qwen, one model at a time or up to four side by side. Answers come back as
+  Markdown; conversations are stored in the app, can be renamed, pinned and searched, and each
+  one keeps its own chat on every service for follow-up questions.
+- Claude, ChatGPT, DeepSeek and Qwen can be opened as tabs and in the new-tab menu.
+- Settings → Models: sign in to each service, see whether it's signed in, switch services
+  on and off, pick the default models for the Ask window.
+
+### Changed
+- Browser client hints now match the Chrome identity on every site, not only Google's.
+- "Google only" proxy mode also routes the chat services.
+
+### Fixed
+- A lookalike host such as `accounts.google.example.com` is no longer treated as a Google
+  sign-in page.
+
 ## [1.0.0] - 2026-09-27
 
 ### Added
@@ -34,4 +53,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Automatic updates from GitHub Releases on Windows and the Linux AppImage.
 - English and Russian interface, auto-detected from the system locale.
 
+[1.1.0]: https://github.com/nikryan-cpu/NoteDesk/releases/tag/v1.1.0
 [1.0.0]: https://github.com/nikryan-cpu/NoteDesk/releases/tag/v1.0.0
