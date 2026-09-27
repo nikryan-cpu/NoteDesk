@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.1] - 2026-09-27
+
+### Added
+- "Ask" button in the title bar, so the Ask window can be opened without the hotkey.
+
 ## [1.1.0] - 2026-09-27
 
 ### Added
@@ -53,5 +58,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Automatic updates from GitHub Releases on Windows and the Linux AppImage.
 - English and Russian interface, auto-detected from the system locale.
 
+[1.1.1]: https://github.com/nikryan-cpu/NoteDesk/releases/tag/v1.1.1
 [1.1.0]: https://github.com/nikryan-cpu/NoteDesk/releases/tag/v1.1.0
 [1.0.0]: https://github.com/nikryan-cpu/NoteDesk/releases/tag/v1.0.0
