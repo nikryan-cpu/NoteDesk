@@ -3,18 +3,23 @@
   import RotateCw from '@lucide/svelte/icons/rotate-cw'
   import ExternalLink from '@lucide/svelte/icons/external-link'
   import LogIn from '@lucide/svelte/icons/log-in'
+  import Clock from '@lucide/svelte/icons/clock'
   import type { AskAnswer } from '@shared/ask'
   import { SERVICES } from '@shared/services'
   import ServiceIcon from '../components/ServiceIcon.svelte'
   import MarkdownView from './MarkdownView.svelte'
-  import { t, retryAnswer, openThread, loginModel, showPageModel } from './state.svelte'
+  import { t, retryAnswer, openThread, loginModel, showPageModel, capsFor } from './state.svelte'
+  import { formatOptionsLine } from '@shared/askFormat'
 
-  let { answer, turnId }: { answer: AskAnswer; turnId: string } = $props()
+  let { answer, turnId, plain = false }: { answer: AskAnswer; turnId: string; plain?: boolean } = $props()
 
   const def = $derived(SERVICES[answer.model])
   const waiting = $derived(answer.status === 'queued' || answer.status === 'sending')
   const streaming = $derived(answer.status === 'streaming')
   const finished = $derived(answer.status === 'done' || answer.status === 'stopped')
+  const optionsLine = $derived(
+    formatOptionsLine(answer.options, capsFor(answer.model), { thinking: t('ask.thinking'), search: t('ask.search') }),
+  )
 
   let copied = $state(false)
   function copyAnswer(): void {
@@ -25,7 +30,7 @@
   }
 </script>
 
-<div class="answer-card panel">
+<div class="answer-card" class:panel={!plain} class:plain>
   <div class="answer-header">
     <ServiceIcon service={answer.model} size={16} />
     <span class="model-name">{def.name}</span>
@@ -33,6 +38,9 @@
   </div>
 
   <div class="answer-body">
+    {#if optionsLine}<div class="options-line faint">{optionsLine}</div>{/if}
+    {#if answer.warning}<p class="warning-note">{answer.warning}</p>{/if}
+
     {#if waiting}
       <div class="skeleton">
         <div class="sk-line" style:width="88%"></div>
@@ -51,6 +59,24 @@
         <ExternalLink size={14} />
         <span>{t('ask.openPage')}</span>
       </button>
+    {:else if answer.status === 'limited'}
+      <div class="limited-block">
+        <Clock size={16} />
+        <div class="limited-text">
+          <span class="limited-title">{t('ask.limitedTitle')}</span>
+          {#if answer.error}<p class="limited-body">{answer.error}</p>{/if}
+        </div>
+      </div>
+      <div class="limited-actions">
+        <button type="button" class="btn" onclick={() => retryAnswer(turnId, answer.model)}>
+          <RotateCw size={14} />
+          <span>{t('ask.retry')}</span>
+        </button>
+        <button type="button" class="btn ghost" onclick={() => showPageModel(answer.model)}>
+          <ExternalLink size={14} />
+          <span>{t('ask.openPage')}</span>
+        </button>
+      </div>
     {:else if answer.status === 'error'}
       <p class="hint error-text">{answer.error || t('ask.status.error')}</p>
       <button type="button" class="btn" onclick={() => retryAnswer(turnId, answer.model)}>
@@ -95,6 +121,27 @@
     border-bottom: var(--border-w) solid var(--border);
     flex: none;
   }
+  .answer-card.plain {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  .answer-card.plain .answer-header {
+    padding: 0 0 6px;
+    border-bottom: none;
+  }
+  .answer-card.plain .model-name {
+    font-weight: 550;
+    color: var(--text-2);
+  }
+  .answer-card.plain .answer-body {
+    padding: 0;
+  }
+  .answer-card.plain .answer-footer {
+    padding: 6px 0 0;
+    border-top: none;
+  }
   .model-name {
     font-weight: 620;
     font-size: 12.5px;
@@ -125,7 +172,8 @@
     color: var(--danger);
   }
   .status-chip[data-status='signed-out'],
-  .status-chip[data-status='needs-action'] {
+  .status-chip[data-status='needs-action'],
+  .status-chip[data-status='limited'] {
     background: color-mix(in oklab, var(--warning) 18%, transparent);
     color: var(--warning);
   }
@@ -139,6 +187,18 @@
     flex: 1;
     min-width: 0;
   }
+  .options-line {
+    font-size: 11px;
+    margin: 0 0 8px;
+  }
+  .warning-note {
+    margin: 0 0 10px;
+    padding: 6px 10px;
+    border-radius: var(--radius);
+    background: color-mix(in oklab, var(--warning) 12%, transparent);
+    color: var(--warning);
+    font-size: 12px;
+  }
   .hint {
     margin: 0 0 10px;
     font-size: 13px;
@@ -148,6 +208,37 @@
     margin: 0 0 10px;
     font-size: 13px;
     white-space: pre-wrap;
+  }
+
+  .limited-block {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    border-radius: var(--radius);
+    background: color-mix(in oklab, var(--warning) 12%, transparent);
+    color: var(--warning);
+  }
+  .limited-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+  .limited-title {
+    font-weight: 650;
+    font-size: 13px;
+  }
+  .limited-body {
+    margin: 0;
+    font-size: 12.5px;
+    white-space: pre-wrap;
+    color: var(--text-2);
+  }
+  .limited-actions {
+    display: flex;
+    gap: 8px;
   }
 
   .answer-footer {

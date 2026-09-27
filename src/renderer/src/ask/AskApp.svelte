@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import X from '@lucide/svelte/icons/x'
-  import { ask, t, init, newConversation, focusComposer, focusSearch, copyLastAnswerOfFirstModel, dismissError, draft, windowAction } from './state.svelte'
+  import { ask, t, init, newConversation, focusComposer, focusSearch, copyLastAnswerOfFirstModel, dismissError } from './state.svelte'
   import TitleBar from './TitleBar.svelte'
   import Sidebar from './Sidebar.svelte'
   import ConversationPane from './ConversationPane.svelte'
@@ -34,9 +34,6 @@
     } else if (mod && e.shiftKey && key === 'c') {
       e.preventDefault()
       copyLastAnswerOfFirstModel()
-    } else if (e.key === 'Escape' && !draft()) {
-      e.preventDefault()
-      windowAction('close')
     }
   }
 </script>

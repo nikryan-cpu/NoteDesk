@@ -98,10 +98,10 @@
     ui.tabs.map((tb) => ({
       id: `tab-${tb.id}`,
       section: 'tabs',
-      label: tb.title || serviceName(tb.service),
-      secondary: multiProfile ? profileName(tb.profileId) : undefined,
+      label: tb.title || (tb.kind === 'ask' ? t('tray.quickAsk') : serviceName(tb.service)),
+      secondary: multiProfile && tb.kind !== 'ask' ? profileName(tb.profileId) : undefined,
       tab: tb,
-      sleeping: tb.sleeping,
+      sleeping: tb.kind !== 'ask' && tb.sleeping,
       run: () => {
         closeOverlay()
         void nd.invoke('tabs:activate', tb.id)
@@ -208,81 +208,84 @@
           void nd.invoke('tabs:close', id)
         },
       })
-      list.push({
-        id: 'cmd-reload-tab',
-        section: 'commands',
-        label: t('action.reload'),
-        icon: RotateCw,
-        combo: ['Mod', 'R'],
-        run: () => {
-          closeOverlay()
-          void nd.invoke('tabs:reload', id)
-        },
-      })
-      list.push({
-        id: 'cmd-find',
-        section: 'commands',
-        label: t('action.find'),
-        icon: Search,
-        combo: ['Mod', 'F'],
-        run: () => {
-          closeOverlay()
-          ui.findOpen = true
-        },
-      })
-      list.push({
-        id: 'cmd-zoom-in',
-        section: 'commands',
-        label: t('action.zoomIn'),
-        icon: ZoomIn,
-        combo: ['Mod', '+'],
-        run: () => {
-          closeOverlay()
-          void nd.invoke('tabs:zoom', id, 1)
-        },
-      })
-      list.push({
-        id: 'cmd-zoom-out',
-        section: 'commands',
-        label: t('action.zoomOut'),
-        icon: ZoomOut,
-        combo: ['Mod', '−'],
-        run: () => {
-          closeOverlay()
-          void nd.invoke('tabs:zoom', id, -1)
-        },
-      })
-      list.push({
-        id: 'cmd-zoom-reset',
-        section: 'commands',
-        label: t('action.zoomReset'),
-        icon: Percent,
-        combo: ['Mod', '0'],
-        run: () => {
-          closeOverlay()
-          void nd.invoke('tabs:zoom', id, 0)
-        },
-      })
-      list.push({
-        id: 'cmd-copy-link',
-        section: 'commands',
-        label: t('action.copyLink'),
-        icon: Copy,
-        run: () => {
-          closeOverlay()
-          void nd.invoke('tabs:copyLink', id)
-        },
-      })
-      list.push({
-        id: 'cmd-open-browser',
-        section: 'commands',
-        label: t('action.openInBrowser'),
-        icon: ExternalLink,
-        run: () => {
-          closeOverlay()
-          void nd.invoke('tabs:openInBrowser', id)
-        },
-      })
+      // URL-related actions make no sense on the Ask tab (nothing to reload, find or zoom).
+      if (active.kind !== 'ask') {
+        list.push({
+          id: 'cmd-reload-tab',
+          section: 'commands',
+          label: t('action.reload'),
+          icon: RotateCw,
+          combo: ['Mod', 'R'],
+          run: () => {
+            closeOverlay()
+            void nd.invoke('tabs:reload', id)
+          },
+        })
+        list.push({
+          id: 'cmd-find',
+          section: 'commands',
+          label: t('action.find'),
+          icon: Search,
+          combo: ['Mod', 'F'],
+          run: () => {
+            closeOverlay()
+            ui.findOpen = true
+          },
+        })
+        list.push({
+          id: 'cmd-zoom-in',
+          section: 'commands',
+          label: t('action.zoomIn'),
+          icon: ZoomIn,
+          combo: ['Mod', '+'],
+          run: () => {
+            closeOverlay()
+            void nd.invoke('tabs:zoom', id, 1)
+          },
+        })
+        list.push({
+          id: 'cmd-zoom-out',
+          section: 'commands',
+          label: t('action.zoomOut'),
+          icon: ZoomOut,
+          combo: ['Mod', '−'],
+          run: () => {
+            closeOverlay()
+            void nd.invoke('tabs:zoom', id, -1)
+          },
+        })
+        list.push({
+          id: 'cmd-zoom-reset',
+          section: 'commands',
+          label: t('action.zoomReset'),
+          icon: Percent,
+          combo: ['Mod', '0'],
+          run: () => {
+            closeOverlay()
+            void nd.invoke('tabs:zoom', id, 0)
+          },
+        })
+        list.push({
+          id: 'cmd-copy-link',
+          section: 'commands',
+          label: t('action.copyLink'),
+          icon: Copy,
+          run: () => {
+            closeOverlay()
+            void nd.invoke('tabs:copyLink', id)
+          },
+        })
+        list.push({
+          id: 'cmd-open-browser',
+          section: 'commands',
+          label: t('action.openInBrowser'),
+          icon: ExternalLink,
+          run: () => {
+            closeOverlay()
+            void nd.invoke('tabs:openInBrowser', id)
+          },
+        })
+      }
     }
 
     list.push({
@@ -413,7 +416,7 @@
       icon: Zap,
       run: () => {
         closeOverlay()
-        void nd.invoke('quick:action', 'show')
+        void nd.invoke('tabs:openAsk')
       },
     })
     list.push({

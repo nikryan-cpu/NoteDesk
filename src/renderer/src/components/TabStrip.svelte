@@ -49,6 +49,7 @@
   }
 
   function tooltip(tab: (typeof ui.tabs)[number]): string {
+    if (tab.kind === 'ask') return tab.title || t('tray.quickAsk')
     const parts = [tab.title || tab.url]
     if (ui.settings.profiles.length > 1) parts.push(t('tabs.profile', { name: profileName(tab.profileId) }))
     if (tab.sleeping) parts.push(t('tabs.sleeping'))
@@ -71,7 +72,7 @@
     <div
       class="tab no-drag"
       class:active
-      class:sleeping={tab.sleeping}
+      class:sleeping={tab.sleeping && tab.kind !== 'ask'}
       class:dragging={dragId === tab.id}
       class:drop-before={dropIndex === i && dragId !== tab.id}
       class:drop-after={dropIndex === i + 1 && i === ui.tabs.length - 1}
@@ -93,14 +94,14 @@
         dropIndex = null
       }}
     >
-      {#if color}<span class="profile" style:background={color}></span>{/if}
+      {#if color && tab.kind !== 'ask'}<span class="profile" style:background={color}></span>{/if}
       <Favicon {tab} />
       {#if !collapsed}
-        <span class="title">{tab.title || serviceName(tab.service)}</span>
-        {#if tab.sleeping}
+        <span class="title">{tab.title || (tab.kind === 'ask' ? t('tray.quickAsk') : serviceName(tab.service))}</span>
+        {#if tab.sleeping && tab.kind !== 'ask'}
           <span class="badge" aria-hidden="true"><Moon size={12} /></span>
         {/if}
-        {#if tab.audible || tab.muted}
+        {#if tab.kind !== 'ask' && (tab.audible || tab.muted)}
           <button
             class="mini"
             title={tab.muted ? t('tabs.unmute') : t('tabs.mute')}

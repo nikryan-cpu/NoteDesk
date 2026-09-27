@@ -59,7 +59,7 @@
       {/if}
     </button>
   {/if}
-  <button class="pill ask" onclick={() => nd.invoke('quick:action', 'show')} title={askHint}>
+  <button class="pill ask" onclick={() => nd.invoke('tabs:openAsk')} title={askHint}>
     <MessagesSquare size={13} />
     <span>{t('tray.quickAsk')}</span>
   </button>

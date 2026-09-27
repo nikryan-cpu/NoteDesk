@@ -26,7 +26,7 @@
   </div>
   <div class="answers" class:grid={turn.answers.length > 1}>
     {#each turn.answers as answer (answer.model)}
-      <AnswerCard {answer} turnId={turn.id} />
+      <AnswerCard {answer} turnId={turn.id} plain={turn.answers.length === 1} />
     {/each}
   </div>
 </div>
@@ -76,7 +76,7 @@
   .answers.grid {
     display: grid;
     grid-auto-flow: column;
-    grid-auto-columns: minmax(280px, 1fr);
+    grid-auto-columns: minmax(240px, 1fr);
     gap: 12px;
     overflow-x: auto;
     padding-bottom: 4px;

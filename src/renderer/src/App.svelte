@@ -7,7 +7,7 @@
   import FindBar from './components/FindBar.svelte'
   import Overlay from './components/Overlay.svelte'
   import CommandPalette from './components/CommandPalette.svelte'
-  import { closeOverlay, init, isDark, nd, openOverlay, openSettings, setSettings, ui } from './lib/state.svelte'
+  import { activeTab, closeOverlay, init, isDark, nd, openOverlay, openSettings, setSettings, ui } from './lib/state.svelte'
   import { applyTheme } from './lib/theme'
   import { computeInsets, titlebarHeight } from './lib/layout'
 
@@ -45,6 +45,7 @@
           else openSettings()
           break
         case 'find':
+          if (activeTab()?.kind === 'ask') break
           if (ui.overlay) closeOverlay()
           ui.findOpen = true
           break
@@ -73,7 +74,7 @@
     {:else}
       <TitleBar />
     {/if}
-    {#if ui.findOpen}
+    {#if ui.findOpen && activeTab()?.kind !== 'ask'}
       <FindBar top={titlebarHeight(ui.settings)} left={insets.left} right={insets.right} />
     {/if}
   {/if}

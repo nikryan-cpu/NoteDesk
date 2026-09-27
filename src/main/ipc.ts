@@ -1,9 +1,9 @@
-// IPC handlers for the shell UI. Only NoteDesk's own pages (shell + Ask window) may call
-// them; Google pages never get the shell preload, and senders are checked anyway.
+// IPC handlers for the shell UI. Only NoteDesk's own pages (the shell and the Ask tab) may
+// call them; Google pages never get the shell preload, and senders are checked anyway.
 import { app, dialog, ipcMain, Menu, nativeTheme, shell, type IpcMainInvokeEvent } from 'electron'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
-import type { InitState, InvokeChannel, InvokeMap } from '@shared/ipc'
+import type { AskViewState, InitState, InvokeChannel, InvokeMap } from '@shared/ipc'
 import { PROFILE_COLORS, type Profile } from '@shared/settings'
 import { isSafeExternal } from '@shared/services'
 import type { AskEngine } from './ask/engine'
@@ -14,7 +14,6 @@ import { currentLocale, t } from './i18n'
 import { memoryReport } from './memory'
 import { testProxy } from './proxy'
 import { deletePrompt, listPrompts, savePrompt } from './prompts'
-import type { QuickWindow } from './quick'
 import { forgetSession, sessionFor } from './sessions'
 import { getSettings, publicSettings, updateSettings } from './settings'
 import { isHotkeyAvailable, setHotkeyRecording } from './shortcuts'
@@ -23,8 +22,20 @@ import { systemSupportsMaterial, type MainWindow } from './window'
 
 type Handler<K extends InvokeChannel> = (...args: Parameters<InvokeMap[K]>) => ReturnType<InvokeMap[K]> | Promise<ReturnType<InvokeMap[K]>>
 
-export function registerIpc(mw: MainWindow, quick: QuickWindow, ask: AskEngine): void {
-  const trusted = (e: IpcMainInvokeEvent) => e.sender === mw.shell.webContents || e.sender === quick.uiWebContents()
+/** Look of the Ask tab's page: it has no shell around it, so main hands it theme and locale. */
+export function askViewState(isDark: () => boolean): AskViewState {
+  const s = getSettings()
+  return { locale: currentLocale(), dark: isDark(), theme: s.theme, accent: s.accent }
+}
+
+/** Pushes the Ask tab's current theme/locale to it, for a settings or system-theme change. */
+export function sendAskTheme(mw: MainWindow, isDark: () => boolean): void {
+  const wc = mw.tabs.askWebContents()
+  if (wc) wc.send('nd:ask-theme', askViewState(isDark))
+}
+
+export function registerIpc(mw: MainWindow, ask: AskEngine, isDark: () => boolean): void {
+  const trusted = (e: IpcMainInvokeEvent) => e.sender === mw.shell.webContents || e.sender === mw.tabs.askWebContents()
 
   function handle<K extends InvokeChannel>(channel: K, fn: Handler<K>): void {
     ipcMain.handle(channel, (event, ...args) => {
@@ -65,6 +76,10 @@ export function registerIpc(mw: MainWindow, quick: QuickWindow, ask: AskEngine):
   handle('tabs:mute', (id) => tabs.toggleMute(str(id)))
   handle('tabs:copyLink', (id) => tabs.copyLink(str(id)))
   handle('tabs:openInBrowser', (id) => tabs.openInBrowser(str(id)))
+  handle('tabs:openAsk', () => {
+    mw.show()
+    tabs.openAsk()
+  })
   handle('tabs:menu', (id) => {
     const tab = tabs.get(str(id))
     if (!tab) return
@@ -72,14 +87,21 @@ export function registerIpc(mw: MainWindow, quick: QuickWindow, ask: AskEngine):
     const index = snapshot.tabs.findIndex((x) => x.id === tab.id)
     const info = snapshot.tabs[index]!
     const isActive = snapshot.activeId === tab.id
+    const isAsk = info.kind === 'ask'
     Menu.buildFromTemplate([
       { label: t('tabs.reload'), click: () => tabs.reload(tab.id) },
-      { label: t('tabs.duplicate'), click: () => tabs.duplicate(tab.id) },
-      ...(info.audible || info.muted ? [{ label: info.muted ? t('tabs.unmute') : t('tabs.mute'), click: () => tabs.toggleMute(tab.id) }] : []),
+      // Duplicating, muting, copying the link or opening in a browser make no sense for the
+      // Ask tab: there is only ever one of it, it has no audio, and no shareable address.
+      ...(isAsk ? [] : [{ label: t('tabs.duplicate'), click: () => tabs.duplicate(tab.id) }]),
+      ...(!isAsk && (info.audible || info.muted) ? [{ label: info.muted ? t('tabs.unmute') : t('tabs.mute'), click: () => tabs.toggleMute(tab.id) }] : []),
       { label: t('tabs.sleep'), enabled: !info.sleeping && !isActive, click: () => void tabs.sleep(tab.id) },
-      { type: 'separator' },
-      { label: t('tabs.copyLink'), click: () => tabs.copyLink(tab.id) },
-      { label: t('tabs.openInBrowser'), click: () => tabs.openInBrowser(tab.id) },
+      ...(isAsk
+        ? []
+        : [
+            { type: 'separator' as const },
+            { label: t('tabs.copyLink'), click: () => tabs.copyLink(tab.id) },
+            { label: t('tabs.openInBrowser'), click: () => tabs.openInBrowser(tab.id) },
+          ]),
       { type: 'separator' },
       { label: t('tabs.close'), click: () => tabs.close(tab.id) },
       {
@@ -216,7 +238,7 @@ export function registerIpc(mw: MainWindow, quick: QuickWindow, ask: AskEngine):
     app.exit(0)
   })
 
-  handle('quick:action', (action) => quick.action(action))
+  handle('ask:view', () => askViewState(isDark))
 
   handle('menu:popup', (items) =>
     new Promise<string | null>((resolve) => {

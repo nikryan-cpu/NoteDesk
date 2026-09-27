@@ -29,11 +29,18 @@ export function setShortcutActions(a: ShortcutActions): void {
 
 const isMac = process.platform === 'darwin'
 
-export function handleShortcut(input: Input, _source: 'shell' | 'content'): boolean {
+export function handleShortcut(input: Input, source: 'shell' | 'content' | 'ask'): boolean {
   if (!actions || recording || input.type !== 'keyDown') return false
   const a = actions
   const mod = isMac ? input.meta : input.control
   const { shift, alt, code } = input
+
+  // The Ask tab's own page owns these combinations (new conversation, search, copy answer,
+  // and its own Escape handling), so let the keystroke reach it instead of the app shortcut.
+  if (source === 'ask') {
+    if (code === 'Escape') return false
+    if (mod && !alt && (code === 'KeyN' || code === 'KeyF' || (code === 'KeyC' && shift))) return false
+  }
 
   if (mod && !alt) {
     if (/^Digit[1-9]$/.test(code) && !shift) {

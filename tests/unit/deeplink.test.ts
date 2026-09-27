@@ -41,8 +41,12 @@ describe('parseDeepLink', () => {
     expect(parseDeepLink('notedesk://new/bogus')).toEqual({ type: 'new', service: 'notebook' })
   })
 
-  it('parses quick', () => {
-    expect(parseDeepLink('notedesk://quick')).toEqual({ type: 'quick' })
+  it('parses ask', () => {
+    expect(parseDeepLink('notedesk://ask')).toEqual({ type: 'ask' })
+  })
+
+  it('parses the old quick route as an alias for ask', () => {
+    expect(parseDeepLink('notedesk://quick')).toEqual({ type: 'ask' })
   })
 
   it('returns null for an unknown route', () => {
@@ -60,7 +64,8 @@ describe('parseDeepLink', () => {
   it('matches the route case-insensitively', () => {
     const raw = 'notedesk://OPEN?url=https%3A%2F%2Fnotebook.google%2Fnotebook%2Fabc'
     expect(parseDeepLink(raw)).toEqual({ type: 'open', url: 'https://notebook.google/notebook/abc' })
-    expect(parseDeepLink('notedesk://QUICK')).toEqual({ type: 'quick' })
+    expect(parseDeepLink('notedesk://ASK')).toEqual({ type: 'ask' })
+    expect(parseDeepLink('notedesk://QUICK')).toEqual({ type: 'ask' })
   })
 })
 

@@ -1,9 +1,14 @@
-// notedesk:// links: notedesk://open?url=<google url>, notedesk://new/gemini, notedesk://quick
+// notedesk:// links: notedesk://open?url=<google url>, notedesk://new/gemini, notedesk://ask
+// (notedesk://quick is the old route, kept working as an alias for existing shortcuts/links).
 import { isAllowedInApp, SERVICE_IDS, type ServiceId } from './services'
 
-export type DeepLink = { type: 'open'; url: string } | { type: 'new'; service: ServiceId } | { type: 'quick' }
+export type DeepLink = { type: 'open'; url: string } | { type: 'new'; service: ServiceId } | { type: 'ask' }
 
 export const PROTOCOL = 'notedesk'
+
+/** The Ask tab's pseudo-URL: the notedesk://ask deep link, and what a saved session/closed-tab
+ *  entry uses to remember "this tab was the Ask tab" without a real address. */
+export const ASK_URL = `${PROTOCOL}://ask`
 
 export function parseDeepLink(raw: string): DeepLink | null {
   let url: URL
@@ -24,7 +29,7 @@ export function parseDeepLink(raw: string): DeepLink | null {
     const service = (SERVICE_IDS as readonly string[]).includes(rest) ? (rest as ServiceId) : 'notebook'
     return { type: 'new', service }
   }
-  if (route === 'quick') return { type: 'quick' }
+  if (route === 'ask' || route === 'quick') return { type: 'ask' }
   return null
 }
 

@@ -4,6 +4,7 @@
   import LogIn from '@lucide/svelte/icons/log-in'
   import RefreshCw from '@lucide/svelte/icons/refresh-cw'
   import Zap from '@lucide/svelte/icons/zap'
+  import Bug from '@lucide/svelte/icons/bug'
   import { MAX_COMPARE_MODELS, type ModelState, type ModelStatus } from '@shared/ask'
   import { MODEL_IDS, SERVICES, type ModelId } from '@shared/services'
   import Group from './Group.svelte'
@@ -17,6 +18,8 @@
 
   let statuses = $state<Partial<Record<ModelId, ModelStatus>>>({})
   let checking = $state(false)
+  let diagBusy = $state<Partial<Record<ModelId, boolean>>>({})
+  let diagResult = $state<Partial<Record<ModelId, { path: string | null }>>>({})
 
   function applyStatuses(list: ModelStatus[]) {
     const next = { ...statuses }
@@ -58,8 +61,21 @@
     if (state === 'ready') return t('models.statusReady')
     if (state === 'signed-out') return t('models.statusSignedOut')
     if (state === 'needs-action') return t('models.statusNeedsAction')
+    if (state === 'limited') return t('models.statusLimited')
     if (state === 'error') return t('models.statusError')
     return t('models.statusUnknown')
+  }
+
+  async function diagnose(id: ModelId): Promise<void> {
+    diagBusy = { ...diagBusy, [id]: true }
+    try {
+      const path = await nd.invoke('ask:diagnose', id)
+      diagResult = { ...diagResult, [id]: { path } }
+    } catch {
+      diagResult = { ...diagResult, [id]: { path: null } }
+    } finally {
+      diagBusy = { ...diagBusy, [id]: false }
+    }
   }
 
   function setEnabled(id: ModelId, on: boolean) {
@@ -111,9 +127,19 @@
           <LogIn size={14} />
           {t('models.signIn')}
         </button>
+        <button type="button" class="btn ghost" disabled={diagBusy[id]} onclick={() => diagnose(id)}>
+          <Bug size={14} class={diagBusy[id] ? 'spin' : ''} />
+          {t('models.diagnose')}
+        </button>
         <Toggle checked={enabled} disabled={id === 'gemini'} label={svc.name} onchange={(v) => setEnabled(id, v)} />
       </div>
     </div>
+    {#if diagResult[id]}
+      <div class="diag-result faint">
+        <span>{diagResult[id]?.path ? t('models.diagnoseSaved', { path: diagResult[id]?.path ?? '' }) : t('models.diagnoseFailed')}</span>
+        <span class="diag-hint">{t('models.diagnoseHint')}</span>
+      </div>
+    {/if}
   {/each}
 </Group>
 
@@ -146,7 +172,7 @@
         <span class="kbd">{key}</span>
       {/each}
     </span>
-    <button type="button" class="btn ghost" onclick={() => nd.invoke('quick:action', 'show')}>
+    <button type="button" class="btn ghost" onclick={() => nd.invoke('tabs:openAsk')}>
       <Zap size={14} />
       {t('models.openWindow')}
     </button>
@@ -198,7 +224,8 @@
     color: var(--success);
   }
   .chip.signed-out,
-  .chip.needs-action {
+  .chip.needs-action,
+  .chip.limited {
     background: color-mix(in oklab, var(--warning) 16%, transparent);
     color: var(--warning);
   }
@@ -211,6 +238,17 @@
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+  }
+  .diag-result {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 14px 12px;
+    margin-top: -6px;
+    font-size: 11.5px;
+  }
+  .diag-hint {
+    font-size: 11px;
   }
   .btn :global(.spin) {
     animation: nd-spin 0.9s linear infinite;

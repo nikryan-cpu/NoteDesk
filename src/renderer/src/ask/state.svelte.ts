@@ -1,9 +1,17 @@
-// Reactive state for the Ask window: theme + locale, the conversation
-// list and whichever conversation is open, wrapped around the 'ask:*' IPC contract. Every
+// Reactive state for the Ask tab: theme + locale, capabilities/options, the conversation list
+// and whichever conversation is open, wrapped around the 'ask:*' IPC contract. Every
 // window.nd call is caught so a missing engine handler shows a line instead of a crash.
-import type { QuickState } from '@shared/ipc'
-import type { AskAnswerUpdate, AskConversation, AskConversationSummary, ModelId, ModelStatus } from '@shared/ask'
-import { MAX_COMPARE_MODELS } from '@shared/ask'
+import type { AskViewState } from '@shared/ipc'
+import type {
+  AskAnswerUpdate,
+  AskConversation,
+  AskConversationSummary,
+  ModelCapabilities,
+  ModelId,
+  ModelOptions,
+  ModelStatus,
+} from '@shared/ask'
+import { MAX_COMPARE_MODELS, sanitizeModelOptions } from '@shared/ask'
 import { MODEL_IDS } from '@shared/services'
 import { translate, type I18nKey } from '@shared/i18n'
 import type { Locale } from '@shared/settings'
@@ -35,12 +43,14 @@ const TOKEN_VAR: Record<keyof ThemeTokens, string> = {
 
 export const ask = $state({
   ready: false,
-  quick: { pinned: false, locale: 'en', dark: false, theme: 'minimal', accent: '' } as QuickState,
+  view: { locale: 'en', dark: false, theme: 'minimal', accent: '' } as AskViewState,
   conversations: [] as AskConversationSummary[],
   statuses: [] as ModelStatus[],
   enabledModels: [] as ModelId[],
   defaultModels: [] as ModelId[],
   draftModels: [] as ModelId[],
+  capabilities: {} as Record<ModelId, ModelCapabilities>,
+  defaultOptions: {} as Partial<Record<ModelId, ModelOptions>>,
   current: null as AskConversation | null,
   loadingConv: false,
   search: '',
@@ -50,14 +60,14 @@ export const ask = $state({
 })
 
 export function locale(): Locale {
-  return ask.quick.locale
+  return ask.view.locale
 }
 
 export function t(key: I18nKey, params?: Record<string, string | number>): string {
   return translate(locale(), key, params)
 }
 
-function applyQuickTheme(s: QuickState): void {
+function applyAskTheme(s: AskViewState): void {
   const id = (s.theme in THEMES ? s.theme : 'minimal') as ThemeId
   const def = THEMES[id]
   const tokens = themeTokens(id, s.dark)
@@ -107,9 +117,9 @@ function patchAnswer(u: AskAnswerUpdate): void {
 
 export async function init(): Promise<void> {
   try {
-    const s = await nd.invoke('quick:action', 'init')
-    ask.quick = s
-    applyQuickTheme(s)
+    const s = await nd.invoke('ask:view')
+    ask.view = s
+    applyAskTheme(s)
   } catch (e) {
     reportError(e)
   }
@@ -121,13 +131,15 @@ export async function init(): Promise<void> {
     ask.enabledModels = data.enabledModels
     ask.defaultModels = data.defaultModels
     ask.draftModels = data.defaultModels.length ? data.defaultModels : data.enabledModels.slice(0, 1)
+    ask.capabilities = data.capabilities
+    ask.defaultOptions = data.defaultOptions
   } catch (e) {
     reportError(e)
   }
 
-  nd.on('quick-theme', (s) => {
-    ask.quick = s
-    applyQuickTheme(s)
+  nd.on('ask-theme', (s) => {
+    ask.view = s
+    applyAskTheme(s)
   })
   nd.on('ask-answer', patchAnswer)
   nd.on('ask-conversations', (list) => (ask.conversations = list))
@@ -197,17 +209,46 @@ export function selectOnlyModel(model: ModelId): void {
   applyModels([model])
 }
 
+/** Capabilities of one model's page (variants it offers, thinking/search switches). */
+export function capsFor(model: ModelId): ModelCapabilities | undefined {
+  return ask.capabilities[model]
+}
+
+/**
+ * Options in effect for a model: the current conversation's own choice, or (for a new
+ * conversation) the last choice made anywhere, sanitized against what the service actually
+ * supports.
+ */
+export function optionsFor(model: ModelId): ModelOptions {
+  const raw = ask.current ? ask.current.options[model] : ask.defaultOptions[model]
+  return sanitizeModelOptions(raw, capsFor(model))
+}
+
+/** Applies a partial change to a model's options and pushes it to the engine. */
+export function setModelOption(model: ModelId, patch: Partial<ModelOptions>): void {
+  const next = sanitizeModelOptions({ ...optionsFor(model), ...patch }, capsFor(model))
+  if (ask.current) {
+    ask.current.options[model] = next
+    void nd.invoke('ask:setOptions', ask.current.id, model, next).catch(reportError)
+  }
+  // Keep the "last used" options up to date so the next new conversation starts from them.
+  ask.defaultOptions[model] = next
+  void nd.invoke('ask:setOptions', null, model, next).catch(reportError)
+}
+
 export async function send(promptRaw: string): Promise<void> {
   const prompt = promptRaw.trim()
   if (!prompt) return
-  // Plain copy: IPC can't clone the reactive proxy behind the selection.
+  // Plain copies: IPC can't clone the reactive proxies behind the selection and its options.
   const models = [...activeModels()]
   if (!models.length) return
+  const options: Partial<Record<ModelId, ModelOptions>> = {}
+  for (const m of models) options[m] = optionsFor(m)
   const conversationId = ask.current?.id ?? null
   const key = draftKey()
   ask.drafts[key] = ''
   try {
-    const res = await nd.invoke('ask:send', { conversationId, prompt, models })
+    const res = await nd.invoke('ask:send', { conversationId, prompt, models, options })
     await selectConversation(res.conversationId)
   } catch (e) {
     reportError(e)
@@ -258,16 +299,6 @@ export function loginModel(model: ModelId): void {
 
 export function showPageModel(model: ModelId): void {
   void nd.invoke('ask:showPage', model).catch(reportError)
-}
-
-export function windowAction(a: 'pin' | 'openInMain' | 'close'): void {
-  void nd
-    .invoke('quick:action', a)
-    .then((s) => {
-      ask.quick = s
-      applyQuickTheme(s)
-    })
-    .catch(reportError)
 }
 
 export function isConversationBusy(conv: AskConversation | null): boolean {

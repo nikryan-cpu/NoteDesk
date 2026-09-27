@@ -58,14 +58,23 @@ export async function shortcut(app: ElectronApplication, keyCode: string, modifi
 
 export const modifier = process.platform === 'darwin' ? 'meta' : 'control'
 
-/** Opens the Ask window and returns its page. */
+/** Calls `window.nd.invoke` on the shell page, the same bridge the renderer uses. */
+export async function invoke<T>(run: Running, channel: string, ...args: unknown[]): Promise<T> {
+  const result = await run.shell.evaluate(
+    ({ channel, args }) => {
+      const nd = (window as unknown as { nd: { invoke(channel: string, ...args: unknown[]): Promise<unknown> } }).nd
+      return nd.invoke(channel, ...args)
+    },
+    { channel, args },
+  )
+  return result as T
+}
+
+/** Opens the Ask tab (a WebContentsView, which Playwright still sees as a page) and returns it. */
 export async function openAsk(run: Running): Promise<Page> {
-  const isAsk = (p: Page) => /\/renderer\/quick\.html$/.test(p.url())
+  const isAsk = (p: Page) => /\/renderer\/ask\.html$/.test(p.url())
   const existing = run.app.windows().find(isAsk)
-  await run.shell.evaluate(() => {
-    const nd = (window as unknown as { nd: { invoke(channel: string, ...args: unknown[]): Promise<unknown> } }).nd
-    return nd.invoke('quick:action', 'show')
-  })
+  await invoke(run, 'tabs:openAsk')
   const page = existing ?? (await run.app.waitForEvent('window', { predicate: isAsk }))
   await page.waitForSelector('textarea')
   return page

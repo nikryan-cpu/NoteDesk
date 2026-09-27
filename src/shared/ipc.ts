@@ -16,6 +16,8 @@ export type OsPlatform = 'win32' | 'darwin' | 'linux'
 
 export interface TabInfo {
   id: string
+  /** 'ask' is NoteDesk's own Ask tab (multi-model chat); everything else is a web page. */
+  kind: 'web' | 'ask'
   profileId: string
   service: ServiceId | null
   url: string
@@ -131,8 +133,8 @@ export interface MenuItemSpec {
   sublabel?: string
 }
 
-export interface QuickState {
-  pinned: boolean
+/** Look of the Ask tab's page (it has no shell around it, so it styles itself). */
+export interface AskViewState {
   locale: Locale
   dark: boolean
   theme: string
@@ -165,6 +167,8 @@ export interface InvokeMap {
   'tabs:menu': (id: string) => void
   'tabs:zoom': (id: string, dir: 1 | -1 | 0) => void
   'tabs:mute': (id: string) => void
+  /** Opens the Ask tab, or switches to it when it is already open. */
+  'tabs:openAsk': () => void
   'tabs:copyLink': (id: string) => void
   'tabs:openInBrowser': (id: string) => void
   'find:start': (text: string, forward: boolean, findNext: boolean) => void
@@ -198,10 +202,11 @@ export interface InvokeMap {
   'app:relaunch': () => void
   'app:openDataDir': () => void
   'app:clearAllData': () => void
-  'quick:action': (action: 'init' | 'close' | 'pin' | 'openInMain' | 'show') => QuickState
   'menu:popup': (items: MenuItemSpec[]) => string | null
 
-  // Ask window (multi-model chat)
+  // Ask tab (multi-model chat)
+  /** Theme and language for the Ask tab's page. */
+  'ask:view': () => AskViewState
   'ask:init': () => AskInit
   'ask:list': () => AskConversationSummary[]
   'ask:get': (conversationId: string) => AskConversation | null
@@ -236,7 +241,7 @@ export interface EventMap {
   window: { maximized: boolean; focused: boolean; focusMode: boolean }
   update: UpdateStatus
   'system-theme': { dark: boolean }
-  'quick-theme': QuickState
+  'ask-theme': AskViewState
   'ask-answer': AskAnswerUpdate
   'ask-conversations': AskConversationSummary[]
   'ask-models': ModelStatus[]
@@ -259,6 +264,7 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'tabs:menu',
   'tabs:zoom',
   'tabs:mute',
+  'tabs:openAsk',
   'tabs:copyLink',
   'tabs:openInBrowser',
   'find:start',
@@ -291,8 +297,8 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'app:relaunch',
   'app:openDataDir',
   'app:clearAllData',
-  'quick:action',
   'menu:popup',
+  'ask:view',
   'ask:init',
   'ask:list',
   'ask:get',
@@ -321,7 +327,7 @@ export const EVENT_CHANNELS: readonly EventChannel[] = [
   'window',
   'update',
   'system-theme',
-  'quick-theme',
+  'ask-theme',
   'ask-answer',
   'ask-conversations',
   'ask-models',

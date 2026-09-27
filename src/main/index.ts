@@ -8,10 +8,9 @@ import { emit } from './bus'
 import { initCompat } from './compat'
 import { loadHistory } from './history'
 import { t } from './i18n'
-import { registerIpc } from './ipc'
+import { registerIpc, sendAskTheme } from './ipc'
 import { initGenerationNotifications } from './notifications'
 import { applyProxyEverywhere, initProxyAuth } from './proxy'
-import { QuickWindow } from './quick'
 import { allSessions, applySpellcheck } from './sessions'
 import { getSettings, loadSettings, onSettingsChange, publicSettings, updateSettings } from './settings'
 import { setGlobalHotkey, setShortcutActions } from './shortcuts'
@@ -42,7 +41,6 @@ function bootstrap(): void {
   }
 
   let mw: MainWindow | null = null
-  let quick: QuickWindow | null = null
   let ask: AskEngine | null = null
   let pendingLink: string | null = findDeepLinkArg(process.argv)
 
@@ -53,9 +51,9 @@ function bootstrap(): void {
     if (!raw || !mw) return
     const link = parseDeepLink(raw)
     if (!link) return
-    if (link.type === 'quick') return quick?.show()
     mw.show()
-    if (link.type === 'open') mw.tabs.create({ url: link.url })
+    if (link.type === 'ask') mw.tabs.openAsk()
+    else if (link.type === 'open') mw.tabs.create({ url: link.url })
     else mw.tabs.create({ service: link.service })
   }
 
@@ -83,17 +81,12 @@ function bootstrap(): void {
       },
     })
     const main = mw
-    quick = new QuickWindow(isDarkNow, (url) => {
-      main.show()
-      if (url) main.tabs.create({ url })
-    })
-    const q = quick
     ask = new AskEngine(
       (url) => {
         main.show()
         main.tabs.create({ url })
       },
-      () => q.uiWebContents(),
+      () => main.tabs.askWebContents(),
     )
     const engine = ask
 
@@ -139,7 +132,7 @@ function bootstrap(): void {
       },
     })
 
-    registerIpc(main, q, engine)
+    registerIpc(main, engine, isDarkNow)
     initGenerationNotifications(main)
 
     createTray({
@@ -149,7 +142,10 @@ function bootstrap(): void {
         main.show()
         main.tabs.create({ service })
       },
-      quickAsk: () => q.show(),
+      quickAsk: () => {
+        main.show()
+        main.tabs.openAsk()
+      },
       sleepAll: () => void main.tabs.sleepAll(),
       settings: () => command('settings'),
       quit: () => {
@@ -159,11 +155,9 @@ function bootstrap(): void {
     })
     main.win.on('show', rebuildTrayMenu)
     main.win.on('hide', rebuildTrayMenu)
-    // The main window is never recreated, so once it really closes the app is done
-    // (a hidden Ask window would otherwise keep the process alive).
+    // The main window is never recreated, so once it really closes the app is done.
     main.win.on('closed', () => {
       main.quitting = true
-      q.destroy()
       engine.dispose()
       app.quit()
     })
@@ -182,10 +176,19 @@ function bootstrap(): void {
       })
       n.show()
     }
+    const toggleAsk = () => {
+      if (main.win.isVisible() && main.win.isFocused() && !main.win.isMinimized() && main.tabs.askActive()) {
+        main.hide()
+        return
+      }
+      main.show()
+      main.tabs.openAsk()
+      main.tabs.askWebContents()?.focus()
+    }
     const registerHotkeys = () => {
       const s = getSettings()
       if (!setGlobalHotkey('toggle', s.hotkeys.toggleWindow, () => main.toggle())) warnTaken(s.hotkeys.toggleWindow)
-      if (!setGlobalHotkey('quick', s.hotkeys.quickAsk, () => q.toggle())) warnTaken(s.hotkeys.quickAsk)
+      if (!setGlobalHotkey('ask', s.hotkeys.quickAsk, toggleAsk)) warnTaken(s.hotkeys.quickAsk)
     }
     registerHotkeys()
 
@@ -199,15 +202,18 @@ function bootstrap(): void {
 
     onSettingsChange((next, prev) => {
       emit('settings', publicSettings())
-      if (next.theme !== prev.theme || next.colorMode !== prev.colorMode) {
-        main.applyTheme()
-        q.restyle()
+      if (next.theme !== prev.theme || next.colorMode !== prev.colorMode) main.applyTheme()
+      if (next.theme !== prev.theme || next.colorMode !== prev.colorMode || next.accent !== prev.accent || next.locale !== prev.locale) {
+        sendAskTheme(main, isDarkNow)
       }
       if (next.spellcheck !== prev.spellcheck || next.spellcheckLanguages.join() !== prev.spellcheckLanguages.join()) applySpellcheck()
       if (JSON.stringify(next.proxy) !== JSON.stringify(prev.proxy)) void applyProxyEverywhere(allSessions())
       if (next.hotkeys.toggleWindow !== prev.hotkeys.toggleWindow || next.hotkeys.quickAsk !== prev.hotkeys.quickAsk) registerHotkeys()
       if (next.launchAtLogin !== prev.launchAtLogin) app.setLoginItemSettings({ openAtLogin: next.launchAtLogin, args: ['--hidden'] })
-      if (next.locale !== prev.locale) rebuildTrayMenu()
+      if (next.locale !== prev.locale) {
+        rebuildTrayMenu()
+        main.tabs.retitleAsk()
+      }
       if (next.restoreSession !== prev.restoreSession) main.tabs.save()
     })
 
@@ -215,7 +221,7 @@ function bootstrap(): void {
       emit('system-theme', { dark: nativeTheme.shouldUseDarkColors })
       if (getSettings().colorMode === 'system') {
         main.applyTheme()
-        q.restyle()
+        sendAskTheme(main, isDarkNow)
       }
     })
 

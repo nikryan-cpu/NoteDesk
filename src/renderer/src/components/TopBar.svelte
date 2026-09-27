@@ -24,18 +24,20 @@
   >
     <PanelLeft size={16} />
   </button>
-  <div class="nav">
-    <button class="icon-btn" disabled={!tab?.canGoBack} title={t('nav.back')} onclick={() => tab && nd.invoke('tabs:navigate', tab.id, 'back')}>
-      <ArrowLeft size={16} />
-    </button>
-    <button class="icon-btn" disabled={!tab?.canGoForward} title={t('nav.forward')} onclick={() => tab && nd.invoke('tabs:navigate', tab.id, 'forward')}>
-      <ArrowRight size={16} />
-    </button>
-    <button class="icon-btn" disabled={!tab} title={t('nav.reload')} onclick={() => tab && nd.invoke('tabs:reload', tab.id)}>
-      <RotateCw size={15} />
-    </button>
-  </div>
-  <div class="title">{tab?.title ?? ''}</div>
+  {#if tab?.kind !== 'ask'}
+    <div class="nav">
+      <button class="icon-btn" disabled={!tab?.canGoBack} title={t('nav.back')} onclick={() => tab && nd.invoke('tabs:navigate', tab.id, 'back')}>
+        <ArrowLeft size={16} />
+      </button>
+      <button class="icon-btn" disabled={!tab?.canGoForward} title={t('nav.forward')} onclick={() => tab && nd.invoke('tabs:navigate', tab.id, 'forward')}>
+        <ArrowRight size={16} />
+      </button>
+      <button class="icon-btn" disabled={!tab} title={t('nav.reload')} onclick={() => tab && nd.invoke('tabs:reload', tab.id)}>
+        <RotateCw size={15} />
+      </button>
+    </div>
+  {/if}
+  <div class="title">{tab?.title || (tab?.kind === 'ask' ? t('tray.quickAsk') : '')}</div>
   <StatusCluster />
 </header>
 

@@ -1,6 +1,9 @@
-// Tab manager: each tab is a WebContentsView hosting a Google web app. Background tabs are put
-// to sleep (their renderer is destroyed) to keep memory low and are recreated on demand.
-import { BrowserWindow, WebContentsView, clipboard, shell, type Rectangle, type WebContents } from 'electron'
+// Tab manager: each tab is a WebContentsView hosting a Google web app, except the single Ask
+// tab, which hosts NoteDesk's own multi-model chat page instead. Background tabs are put to
+// sleep (their renderer is destroyed) to keep memory low and are recreated on demand.
+import { app, BrowserWindow, WebContentsView, clipboard, shell, type Rectangle, type WebContents } from 'electron'
+import { join } from 'node:path'
+import { ASK_URL } from '@shared/deeplink'
 import type { TabInfo, TabsSnapshot } from '@shared/ipc'
 import {
   SERVICES,
@@ -17,6 +20,7 @@ import { cleanTitle } from '@shared/text'
 import { emit } from './bus'
 import { attachContentContextMenu } from './contextmenu'
 import { recordVisit, updateTitle } from './history'
+import { t as tt } from './i18n'
 import { sessionFor } from './sessions'
 import { getSettings } from './settings'
 import { handleShortcut } from './shortcuts'
@@ -24,6 +28,8 @@ import { readJson, writeJson } from './store'
 
 interface Tab {
   id: string
+  /** 'ask' is NoteDesk's own Ask tab; at most one ever exists. */
+  kind: 'web' | 'ask'
   profileId: string
   url: string
   title: string
@@ -89,6 +95,7 @@ export class TabManager {
     const alive = wc && !wc.isDestroyed()
     return {
       id: t.id,
+      kind: t.kind,
       profileId: t.profileId,
       service: serviceForUrl(t.url),
       url: t.url,
@@ -134,12 +141,16 @@ export class TabManager {
   // ---------------------------------------------------------------- lifecycle
 
   create(opts: { service?: ServiceId; url?: string; profileId?: string; activate?: boolean; index?: number; sleeping?: boolean; title?: string; favicon?: string | null }): Tab {
+    // notedesk://ask never becomes a web tab: it is how a saved session, a closed-tab entry or
+    // a deep link says "the Ask tab was here", so route it to the one Ask tab instead.
+    if (opts.url === ASK_URL) return this.placeTab(this.buildAskTab(), opts)
     const s = getSettings()
     const profileId = s.profiles.some((p) => p.id === opts.profileId) ? opts.profileId! : s.defaultProfileId
     let url = opts.url && isAllowedInApp(opts.url) ? opts.url : SERVICES[opts.service ?? s.defaultService].home
     if (url === 'about:blank') url = SERVICES[s.defaultService].home
     const tab: Tab = {
       id: newId(),
+      kind: 'web',
       profileId,
       url,
       title: opts.title ?? '',
@@ -153,12 +164,73 @@ export class TabManager {
       error: null,
       zoom: 1,
     }
+    return this.placeTab(tab, opts)
+  }
+
+  private placeTab(tab: Tab, opts: { activate?: boolean; index?: number; sleeping?: boolean }): Tab {
+    if (tab.kind === 'ask') {
+      // At most one Ask tab: opening a second one just switches to the first.
+      const existing = this.askTab()
+      if (existing) {
+        if (opts.activate !== false) this.activate(existing.id)
+        return existing
+      }
+    }
     const index = opts.index ?? (this.activeId ? this.tabs.findIndex((t) => t.id === this.activeId) + 1 : this.tabs.length)
     this.tabs.splice(Math.max(0, Math.min(index, this.tabs.length)), 0, tab)
     if (!opts.sleeping && opts.activate === false) this.wake(tab)
     if (opts.activate !== false) this.activate(tab.id)
     this.changed()
     return tab
+  }
+
+  private buildAskTab(): Tab {
+    return {
+      id: newId(),
+      kind: 'ask',
+      profileId: '',
+      url: ASK_URL,
+      title: tt('tray.quickAsk'),
+      favicon: null,
+      view: null,
+      lastActive: Date.now(),
+      loading: false,
+      audible: false,
+      muted: false,
+      crashed: false,
+      error: null,
+      zoom: 1,
+    }
+  }
+
+  private askTab(): Tab | undefined {
+    return this.tabs.find((t) => t.kind === 'ask')
+  }
+
+  /** Opens the Ask tab, or switches to it when it is already open. Returns its id. */
+  openAsk(): string {
+    return this.create({ url: ASK_URL }).id
+  }
+
+  /** The Ask tab's live webContents, or null while it is asleep or not open. */
+  askWebContents(): WebContents | null {
+    const wc = this.askTab()?.view?.webContents
+    return wc && !wc.isDestroyed() ? wc : null
+  }
+
+  /** True while the Ask tab is the active one, for the global hotkey's toggle behaviour. */
+  askActive(): boolean {
+    return this.active()?.kind === 'ask'
+  }
+
+  /** Refreshes the Ask tab's title after a locale change; its page never repaints the tab strip. */
+  retitleAsk(): void {
+    const tab = this.askTab()
+    const title = tt('tray.quickAsk')
+    if (tab && tab.title !== title) {
+      tab.title = title
+      this.changed()
+    }
   }
 
   activate(id: string): void {
@@ -223,7 +295,7 @@ export class TabManager {
 
   duplicate(id: string): void {
     const tab = this.get(id)
-    if (tab) this.create({ url: tab.url, profileId: tab.profileId, index: this.tabs.indexOf(tab) + 1 })
+    if (tab && tab.kind === 'web') this.create({ url: tab.url, profileId: tab.profileId, index: this.tabs.indexOf(tab) + 1 })
   }
 
   closeProfileTabs(profileId: string): void {
@@ -283,6 +355,7 @@ export class TabManager {
     if (tab.view) return
     tab.crashed = false
     tab.error = null
+    if (tab.kind === 'ask') return this.wakeAsk(tab)
     const view = new WebContentsView({
       webPreferences: {
         session: sessionFor(tab.profileId),
@@ -309,6 +382,28 @@ export class TabManager {
     void view.webContents.loadURL(target).catch(() => {
       /* failures surface through did-fail-load */
     })
+  }
+
+  /** The Ask tab's own page, not a Google session: no profile partition, the shell's preload,
+   *  and it always loads for real (its tests drive the engine, not Google, so E2E runs need it too). */
+  private wakeAsk(tab: Tab): void {
+    const view = new WebContentsView({
+      webPreferences: {
+        preload: join(__dirname, '../preload/shell.js'),
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        spellcheck: getSettings().spellcheck,
+      },
+    })
+    view.setBackgroundColor(this.host.contentBackground())
+    view.setBorderRadius(this.host.contentRadius())
+    tab.view = view
+    this.wireAsk(tab, view.webContents)
+    tab.loading = true
+    const devUrl = process.env['ELECTRON_RENDERER_URL']
+    if (!app.isPackaged && devUrl) void view.webContents.loadURL(`${devUrl}/ask.html`)
+    else void view.webContents.loadFile(join(__dirname, '../renderer/ask.html'))
   }
 
   private destroyView(tab: Tab): void {
@@ -380,7 +475,8 @@ export class TabManager {
   navigate(id: string, action: 'back' | 'forward' | 'home'): void {
     const tab = this.get(id)
     const wc = tab?.view?.webContents
-    if (!tab || !wc || wc.isDestroyed()) return
+    // The Ask tab never navigates: back/forward/home are no-ops for it.
+    if (!tab || !wc || wc.isDestroyed() || tab.kind === 'ask') return
     if (action === 'back' && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack()
     else if (action === 'forward' && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward()
     else if (action === 'home') void wc.loadURL(SERVICES[serviceForUrl(tab.url) ?? getSettings().defaultService].home)
@@ -409,12 +505,12 @@ export class TabManager {
 
   copyLink(id: string): void {
     const tab = this.get(id)
-    if (tab) clipboard.writeText(tab.url)
+    if (tab && tab.kind === 'web') clipboard.writeText(tab.url)
   }
 
   openInBrowser(id: string): void {
     const tab = this.get(id)
-    if (tab && isSafeExternal(tab.url)) void shell.openExternal(tab.url)
+    if (tab && tab.kind === 'web' && isSafeExternal(tab.url)) void shell.openExternal(tab.url)
   }
 
   // ---------------------------------------------------------------- persistence
@@ -430,7 +526,7 @@ export class TabManager {
   restore(): void {
     const s = getSettings()
     const saved = readJson<{ tabs?: SavedTab[]; activeIndex?: number }>('session', {})
-    const list = s.restoreSession && Array.isArray(saved.tabs) ? saved.tabs.filter((t) => t && isAllowedInApp(t.url)) : []
+    const list = s.restoreSession && Array.isArray(saved.tabs) ? saved.tabs.filter((t) => t && (t.url === ASK_URL || isAllowedInApp(t.url))) : []
     if (list.length === 0) {
       this.create({ service: s.defaultService })
       return
@@ -552,6 +648,43 @@ export class TabManager {
     wc.on('did-create-window', (child) => this.configurePopup(child))
     attachContentContextMenu(wc, {
       openInNewTab: (url) => this.create({ url, profileId: tab.profileId, index: this.tabs.indexOf(tab) + 1 }),
+    })
+  }
+
+  /** Wiring for the Ask tab's own page: no navigation, no history/title/favicon tracking, and
+   *  the page keeps a few shortcuts (new conversation, search, copy answer, Escape) for itself. */
+  private wireAsk(tab: Tab, wc: WebContents): void {
+    const alive = () => tab.view?.webContents === wc
+
+    wc.on('did-start-loading', () => {
+      if (!alive()) return
+      tab.loading = true
+      this.changed()
+    })
+    wc.on('did-stop-loading', () => {
+      if (!alive()) return
+      tab.loading = false
+      this.changed()
+    })
+    wc.on('render-process-gone', (_e, details) => {
+      if (!alive() || details.reason === 'clean-exit') return
+      tab.crashed = true
+      tab.loading = false
+      this.syncAttachment()
+      this.changed()
+    })
+    wc.on('before-input-event', (event, input) => {
+      if (handleShortcut(input, 'ask')) event.preventDefault()
+    })
+    // This view only ever shows NoteDesk's own Ask page; a stray navigation attempt (a link
+    // click bubbling up) is refused, links open in a web tab instead via the context menu.
+    wc.on('will-navigate', (event) => event.preventDefault())
+    wc.setWindowOpenHandler(({ url }) => {
+      if (isSafeExternal(url)) void shell.openExternal(url)
+      return { action: 'deny' }
+    })
+    attachContentContextMenu(wc, {
+      openInNewTab: (url) => this.create({ url, index: this.tabs.indexOf(tab) + 1 }),
     })
   }
 

@@ -1,12 +1,11 @@
 <script lang="ts">
-  import Pin from '@lucide/svelte/icons/pin'
-  import PinOff from '@lucide/svelte/icons/pin-off'
-  import AppWindow from '@lucide/svelte/icons/app-window'
-  import X from '@lucide/svelte/icons/x'
+  // Slim header for the Ask tab: no window chrome (the shell's own title bar and tab strip sit
+  // above this), just the sidebar toggle, the conversation's editable title and a way to start
+  // a fresh one.
+  import Plus from '@lucide/svelte/icons/plus'
   import PanelLeft from '@lucide/svelte/icons/panel-left'
   import PanelLeftClose from '@lucide/svelte/icons/panel-left-close'
-  import logo from '../assets/logo-small.svg'
-  import { ask, t, windowAction, renameConversation } from './state.svelte'
+  import { ask, t, newConversation, focusComposer, renameConversation } from './state.svelte'
 
   let renaming = $state(false)
   let renameText = $state('')
@@ -50,16 +49,20 @@
   function toggleSidebar(): void {
     ask.sidebarOpen = !ask.sidebarOpen
   }
+
+  function startNew(): void {
+    newConversation()
+    focusComposer()
+  }
 </script>
 
-<div class="title-bar drag">
-  <button type="button" class="icon-btn no-drag" title={t('ask.toggleSidebar')} onclick={toggleSidebar}>
+<div class="title-bar">
+  <button type="button" class="icon-btn" title={t('ask.toggleSidebar')} onclick={toggleSidebar}>
     {#if ask.sidebarOpen}<PanelLeftClose size={15} />{:else}<PanelLeft size={15} />{/if}
   </button>
-  <img class="mark" src={logo} alt="" draggable="false" />
   {#if renaming}
     <input
-      class="title-input no-drag"
+      class="title-input"
       bind:this={inputEl}
       bind:value={renameText}
       onkeydown={onInputKeydown}
@@ -70,7 +73,7 @@
   {:else}
     <button
       type="button"
-      class="title-text no-drag"
+      class="title-text"
       class:clickable={!!ask.current}
       disabled={!ask.current}
       onclick={startRename}
@@ -80,24 +83,9 @@
     </button>
   {/if}
   <div class="spacer"></div>
-  <div class="actions no-drag">
-    <button
-      type="button"
-      class="icon-btn"
-      class:active={ask.quick.pinned}
-      title={t('ask.pinWindow')}
-      aria-pressed={ask.quick.pinned}
-      onclick={() => windowAction('pin')}
-    >
-      {#if ask.quick.pinned}<PinOff size={15} />{:else}<Pin size={15} />{/if}
-    </button>
-    <button type="button" class="icon-btn" title={t('ask.openMain')} onclick={() => windowAction('openInMain')}>
-      <AppWindow size={15} />
-    </button>
-    <button type="button" class="icon-btn" title={t('ask.close')} onclick={() => windowAction('close')}>
-      <X size={15} />
-    </button>
-  </div>
+  <button type="button" class="icon-btn" title={t('ask.newConversation')} onclick={startNew}>
+    <Plus size={16} />
+  </button>
 </div>
 
 <style>
@@ -111,15 +99,10 @@
     border-bottom: var(--border-w) solid var(--border);
     flex: none;
   }
-  .mark {
-    width: 17px;
-    height: 17px;
-    flex: none;
-  }
   .title-text,
   .title-input {
     min-width: 0;
-    max-width: 42%;
+    max-width: 50%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -146,15 +129,5 @@
   }
   .spacer {
     flex: 1;
-  }
-  .actions {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    flex: none;
-  }
-  .icon-btn.active {
-    color: var(--accent);
-    background: var(--accent-soft);
   }
 </style>

@@ -34,7 +34,7 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
-          quick: resolve(__dirname, 'src/renderer/quick.html'),
+          ask: resolve(__dirname, 'src/renderer/ask.html'),
         },
       },
     },

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
-import { launch, openAsk, type Running } from './app'
+import { invoke, launch, openAsk, type Running } from './app'
 
-// The Ask window drives each service's page in the background. In E2E runs every model points
+// The Ask tab drives each service's page in the background. In E2E runs every model points
 // at tests/fixtures/fake-chat.html, a local page that streams "reply to: <prompt> (turn N)".
 
 let run: Running
@@ -24,7 +24,11 @@ test('sends one prompt to two models and keeps each chat for follow-ups', async 
   run = await launch()
   const page = await openAsk(run)
 
-  await page.getByRole('button', { name: /Claude/ }).first().click()
+  // Add Claude to the comparison: the checkbox next to it in the model menu.
+  await page.locator('.model-trigger').click()
+  await page.locator('.model-row').filter({ hasText: 'Claude' }).locator('.compare-check').check()
+  await page.locator('.model-trigger').click()
+  await expect(page.locator('.model-trigger')).toContainText('+ 1')
   await ask(page, 'What is a monad?')
   await expect(answers(page)).toHaveCount(2)
   await expect(answers(page).locator('.status-chip[data-status="done"]')).toHaveCount(2, { timeout: 20_000 })
@@ -67,9 +71,9 @@ test('conversations have separate memory and survive a restart', async () => {
   await expect(page.locator('.turn')).toHaveCount(2)
 })
 
-test('the title bar button opens the Ask window', async () => {
+test('the title bar button opens the Ask tab', async () => {
   run = await launch()
-  const isAsk = (p: Page) => /\/renderer\/quick\.html$/.test(p.url())
+  const isAsk = (p: Page) => /\/renderer\/ask\.html$/.test(p.url())
   const opened = run.app.waitForEvent('window', { predicate: isAsk })
   await run.shell.locator('.titlebar .pill.ask').click()
   const page = await opened
@@ -84,9 +88,42 @@ test('a model that joins later gets the earlier turns', async () => {
   await expect(answers(page).locator('.status-chip[data-status="done"]')).toHaveCount(1, { timeout: 20_000 })
 
   // Switch the conversation from Gemini to Claude only.
-  await page.getByRole('button', { name: /Claude/ }).first().dblclick()
+  await page.locator('.model-trigger').click()
+  await page.locator('.model-row').filter({ hasText: 'Claude' }).locator('.row-main').click()
+  await expect(page.locator('.model-trigger')).toContainText('Claude')
   await ask(page, 'Which number was it?')
   await expect(answers(page).locator('.status-chip[data-status="done"]')).toHaveCount(1, { timeout: 20_000 })
   await expect(answers(page).first()).toContainText('Earlier in this conversation')
   await expect(answers(page).first()).toContainText('Remember the number 42')
+})
+
+interface TabsSnapshotLike {
+  tabs: { tabs: { kind: string }[] }
+}
+
+async function askTabs(run: Running): Promise<{ kind: string }[]> {
+  const init = await invoke<TabsSnapshotLike>(run, 'app:init')
+  return init.tabs.tabs.filter((tab) => tab.kind === 'ask')
+}
+
+test('the Ask tab appears in the shell tab list', async () => {
+  run = await launch()
+  await openAsk(run)
+  expect(await askTabs(run)).toHaveLength(1)
+})
+
+test('opening the Ask tab twice keeps one tab', async () => {
+  run = await launch()
+  await openAsk(run)
+  await openAsk(run)
+  expect(await askTabs(run)).toHaveLength(1)
+})
+
+test('the Ask tab is restored after a restart', async () => {
+  run = await launch()
+  await openAsk(run)
+  const userData = run.userData
+  await run.app.close()
+  run = await launch(userData)
+  expect(await askTabs(run)).toHaveLength(1)
 })
