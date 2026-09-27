@@ -283,6 +283,9 @@ export class TabManager {
         contextIsolation: true,
         nodeIntegration: false,
         webviewTag: false,
+        // Runs the (Node-less, sandboxed) compat preload in iframes too, so embedded Google
+        // frames report the same browser identity as the page around them.
+        nodeIntegrationInSubFrames: true,
         spellcheck: getSettings().spellcheck,
         backgroundThrottling: true,
         navigateOnDragDrop: false,
@@ -477,7 +480,8 @@ export class TabManager {
       this.changed()
     })
     const onNavigate = (url: string) => {
-      if (!alive()) return
+      // about:blank (E2E runs, blank popups) must not replace the tab's real address.
+      if (!alive() || url === 'about:blank') return
       tab.url = url
       tab.zoom = wc.getZoomFactor()
       recordVisit(url, tab.title, tab.profileId)
@@ -556,7 +560,7 @@ export class TabManager {
           parent: parent ?? undefined,
           autoHideMenuBar: true,
           backgroundColor: this.host.contentBackground(),
-          webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+          webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, nodeIntegrationInSubFrames: true },
         },
       }
     }

@@ -13,6 +13,6 @@ try {
   /* page keeps the default identity */
 }
 
-if (/(^|\.)notebook(lm)?\.google(\.com)?$/.test(location.hostname)) {
+if (window.top === window && /(^|\.)notebook(lm)?\.google(\.com)?$/.test(location.hostname)) {
   watchGenerations(() => ipcRenderer.send('content:generation-done'))
 }

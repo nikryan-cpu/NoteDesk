@@ -31,7 +31,7 @@ export function applyCompatToSession(ses: Session): void {
   // The Chrome preset is covered by app.userAgentFallback (client hints stay intact, verified
   // on Electron 44); Firefox needs an explicit session UA.
   if (profile.preset === 'firefox' && profile.userAgent) ses.setUserAgent(profile.userAgent)
-  if (hooked.has(ses)) return
+  if (profile.preset === 'electron' || hooked.has(ses)) return
   hooked.add(ses)
   ses.webRequest.onBeforeSendHeaders({ urls: ['https://*/*'] }, (details, callback) => {
     const host = parseUrl(details.url)?.hostname

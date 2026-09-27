@@ -134,6 +134,7 @@ export class QuickWindow {
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
+        nodeIntegrationInSubFrames: true,
         spellcheck: s.spellcheck,
       },
     })
