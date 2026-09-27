@@ -36,14 +36,15 @@ themes. Windows, macOS and Linux.
 - Gemini Notebook and Gemini tabs (Claude, ChatGPT, DeepSeek and Qwen can be opened as tabs
   too). Only the active tab loads on startup; background tabs fall asleep after 10 minutes and
   free their memory.
-- **Ask window** (`Ctrl+Alt+Space`): one prompt to one model or to up to four side by side.
-  Conversations are kept in the app, and each one continues its own chats on the services.
-  Sign in to each service once in **Settings → Models** (Google sign-in works on all of them).
+- **Ask window** (`Ctrl+Shift+Space`): one prompt to one model or to up to four side by side.
+  Conversations are kept in the app; switch models mid-conversation and the new one gets the
+  earlier messages. Sign in to each service once in **Settings → Models** (Google sign-in
+  works on all of them).
 - Several Google accounts side by side, each with its own isolated sign-in.
 - Command palette (`Ctrl+K`): open tabs, recent notebooks and chats, commands, themes.
 - Prompt library (`Ctrl+P`) that pastes into the focused chat box.
 - 10 themes, accent colour, tabs on top or in a sidebar; Mica/Acrylic on Windows 11.
-- Tray and a global hotkey to show/hide the app (`Ctrl+Shift+Space`).
+- Tray and a global hotkey to show/hide the app (`Ctrl+Shift+Alt+Space`).
 - Downloads panel, notifications, per-app proxy, focus mode (`F11`), spell check,
   `notedesk://` links, memory monitor (`Ctrl+Shift+M`), English and Russian UI.
 

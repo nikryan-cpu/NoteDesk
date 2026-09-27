@@ -128,3 +128,58 @@ export function titleFromPrompt(prompt: string): string {
   const space = cut.lastIndexOf(' ')
   return `${space > 30 ? cut.slice(0, space) : cut}…`
 }
+
+export interface ContextLabels {
+  /** Line before the quoted turns. */
+  header: string
+  /** Speaker label for the user's messages. */
+  user: string
+  /** Line between the quoted turns and the new message. */
+  footer: string
+}
+
+/**
+ * One chat for all models: a model only remembers what was said in its own chat on the
+ * service, so turns it missed (answered by other models since it last answered) are quoted in
+ * front of the prompt. Returns the prompt unchanged when the model has seen everything.
+ */
+export function promptWithContext(
+  conv: AskConversation,
+  turnId: string,
+  model: ModelId,
+  names: Record<ModelId, string>,
+  labels: ContextLabels,
+  maxChars = 12_000,
+): string {
+  const index = conv.turns.findIndex((t) => t.id === turnId)
+  const current = conv.turns[index]
+  if (!current) return ''
+  const prior = conv.turns.slice(0, index)
+  const answered = (t: AskTurn, m: ModelId) =>
+    t.answers.some((a) => a.model === m && (a.status === 'done' || a.status === 'stopped') && a.markdown.trim())
+  let lastSeen = -1
+  prior.forEach((t, i) => {
+    if (answered(t, model)) lastSeen = i
+  })
+
+  const blocks: string[] = []
+  for (const t of prior.slice(lastSeen + 1)) {
+    const answer = t.answers.find((a) => a.model !== model && (a.status === 'done' || a.status === 'stopped') && a.markdown.trim())
+    if (!answer) continue
+    const text = answer.markdown.trim()
+    const clipped = text.length > 4000 ? `${text.slice(0, 4000)}…` : text
+    blocks.push(`${labels.user}: ${t.prompt.trim()}\n\n${names[answer.model]}: ${clipped}`)
+  }
+  if (blocks.length === 0) return current.prompt
+
+  // Keep the most recent turns when the history is long.
+  const kept: string[] = []
+  let size = 0
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const block = blocks[i]!
+    if (kept.length > 0 && size + block.length > maxChars) break
+    kept.unshift(block)
+    size += block.length
+  }
+  return `${labels.header}\n\n${kept.join('\n\n---\n\n')}\n\n${labels.footer}\n\n${current.prompt}`
+}

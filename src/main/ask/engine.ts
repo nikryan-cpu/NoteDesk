@@ -13,11 +13,13 @@ import {
   type AskSendResult,
   type ModelState,
   type ModelStatus,
+  promptWithContext,
 } from '@shared/ask'
 import type { EventChannel, EventMap } from '@shared/ipc'
 import { isAllowedInApp, isModelId, MODEL_IDS, SERVICES, type ModelId } from '@shared/services'
 import type { Settings } from '@shared/settings'
 import { emit } from '../bus'
+import { t } from '../i18n'
 import { sessionFor } from '../sessions'
 import { getSettings, onSettingsChange } from '../settings'
 import { adapterFor } from './adapters'
@@ -419,8 +421,13 @@ export class AskEngine {
       store.setAnswer(handle.conversationId, handle.turnId, next)
       this.pushAnswer(handle.conversationId, handle.turnId, next)
     }
+    // A model that missed earlier turns (answered by other models) gets them quoted first.
+    const conv = store.get(handle.conversationId)
+    const names = Object.fromEntries(MODEL_IDS.map((id) => [id, SERVICES[id].name])) as Record<ModelId, string>
+    const labels = { header: t('askContext.header'), user: t('askContext.user'), footer: t('askContext.footer') }
+    const typed = (conv && promptWithContext(conv, handle.turnId, handle.model, names, labels)) || prompt
     try {
-      await this.runJobBody(page, adapter, handle, prompt, setAnswer)
+      await this.runJobBody(page, adapter, handle, typed, setAnswer)
     } catch (err) {
       console.warn('[ask] job crashed for', handle.model, err)
       if (!handle.cancelled) {

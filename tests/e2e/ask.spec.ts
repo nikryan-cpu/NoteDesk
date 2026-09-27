@@ -75,3 +75,18 @@ test('the title bar button opens the Ask window', async () => {
   const page = await opened
   await expect(page.locator('textarea')).toBeVisible()
 })
+
+test('a model that joins later gets the earlier turns', async () => {
+  run = await launch()
+  const page = await openAsk(run)
+
+  await ask(page, 'Remember the number 42')
+  await expect(answers(page).locator('.status-chip[data-status="done"]')).toHaveCount(1, { timeout: 20_000 })
+
+  // Switch the conversation from Gemini to Claude only.
+  await page.getByRole('button', { name: /Claude/ }).first().dblclick()
+  await ask(page, 'Which number was it?')
+  await expect(answers(page).locator('.status-chip[data-status="done"]')).toHaveCount(1, { timeout: 20_000 })
+  await expect(answers(page).first()).toContainText('Earlier in this conversation')
+  await expect(answers(page).first()).toContainText('Remember the number 42')
+})
