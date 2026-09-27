@@ -4,6 +4,29 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.0] - 2026-09-27
+
+### Added
+- Modes for each model in Ask: the model version (Opus/Sonnet/Haiku, Instant/Thinking, Fast/Pro
+  and so on), deeper reasoning and web search, set per conversation. Services that don't offer
+  a switch simply don't show it.
+- A model added to a conversation later gets the earlier questions and answers of the other
+  models, so the whole conversation is one chat.
+- Limits and errors from the services ("you've reached your limit", "server is busy") are
+  shown on the answer with the service's own text instead of an endless wait.
+- Settings → Models → Diagnostics saves an outline of a service's page (without chat text)
+  to Downloads, for bug reports when a site changes its layout.
+- A notification when a global shortcut is already taken by another app.
+
+### Changed
+- Ask is now a tab in the main window instead of a separate window. `Ctrl+Shift+Space`,
+  the title bar button, the tray and `notedesk://ask` open it.
+- The Ask shortcut is now `Ctrl+Shift+Space` and show/hide is `Ctrl+Shift+Alt+Space`
+  (`Ctrl+Alt+Space` is taken by some desktop chat apps). Shortcuts you changed yourself are
+  kept.
+- The Ask composer has a model menu and mode switches under the prompt, a single model is
+  shown as one column of messages.
+
 ## [1.1.1] - 2026-09-27
 
 ### Added

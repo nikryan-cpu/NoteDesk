@@ -1,7 +1,7 @@
 {
   "name": "notedesk",
   "productName": "NoteDesk",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Unofficial lightweight desktop app for Gemini Notebook (ex-NotebookLM) & Gemini. Not affiliated with Google.",
   "main": "out/main/index.js",
   "author": "nikryan-cpu",

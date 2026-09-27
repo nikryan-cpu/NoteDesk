@@ -2,7 +2,7 @@
 
 *[Русская версия](README.ru.md)*
 
-Desktop app for Gemini Notebook and Gemini, plus an Ask window that sends one prompt to Gemini,
+Desktop app for Gemini Notebook and Gemini, plus an Ask tab that sends one prompt to Gemini,
 Claude, ChatGPT, DeepSeek or Qwen. Tabs, several Google accounts, a command palette and 10
 themes. Windows, macOS and Linux.
 
@@ -36,10 +36,11 @@ themes. Windows, macOS and Linux.
 - Gemini Notebook and Gemini tabs (Claude, ChatGPT, DeepSeek and Qwen can be opened as tabs
   too). Only the active tab loads on startup; background tabs fall asleep after 10 minutes and
   free their memory.
-- **Ask window** (`Ctrl+Shift+Space`): one prompt to one model or to up to four side by side.
-  Conversations are kept in the app; switch models mid-conversation and the new one gets the
-  earlier messages. Sign in to each service once in **Settings → Models** (Google sign-in
-  works on all of them).
+- **Ask tab** (`Ctrl+Shift+Space`): one prompt to one model or to up to four side by side.
+  Under the prompt you pick the model version, reasoning and web search where the service has
+  them. Conversations are kept in the app; switch models mid-conversation and the new one gets
+  the earlier messages. When a service says its limit is reached, the answer shows its message.
+  Sign in to each service once in **Settings → Models** (Google sign-in works on all of them).
 - Several Google accounts side by side, each with its own isolated sign-in.
 - Command palette (`Ctrl+K`): open tabs, recent notebooks and chats, commands, themes.
 - Prompt library (`Ctrl+P`) that pastes into the focused chat box.
@@ -58,9 +59,11 @@ blocked by the admin. Still stuck: [open an issue](https://github.com/nikryan-cp
 
 ## Notes
 
-- **Ask window.** NoteDesk types your prompt into each service's page in the background and
+- **Ask tab.** NoteDesk types your prompt into each service's page in the background and
   reads the answer back. The services don't officially support this, so keep to normal personal
   use; when a site changes its layout, answers from it may stop working until an update.
+  **Settings → Models → Diagnostics** saves a page outline without chat text that you can
+  attach to an issue.
 - **Proxy.** HTTP or SOCKS5, optionally only for Google and the chat services. It doesn't
   guarantee access by itself. SOCKS5 with a login isn't supported by Chromium; use HTTP for that.
 - **Memory.** A sleeping tab uses nothing. With every tab asleep NoteDesk takes about 310 MB,
