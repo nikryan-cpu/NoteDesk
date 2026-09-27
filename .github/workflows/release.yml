@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            flag: --win
+          - os: macos-latest
+            flag: --mac
+          - os: ubuntu-latest
+            flag: --linux
+    runs-on: ${{ matrix.os }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # No code signing certificate yet; stops electron-builder from looking for one.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # electron-builder downloads the Electron builds it packages on its own.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      # electron-builder's publish config (releaseType: draft) creates/updates a draft
+      # release for the tag; the owner reviews it and publishes it by hand.
+      - run: npx electron-builder ${{ matrix.flag }} --publish always
+
+      # Fallback so the built installers are still reachable from the Actions run even if
+      # the draft release needs a closer look before it goes out.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notedesk-${{ matrix.os }}
+          path: release/
+          retention-days: 5

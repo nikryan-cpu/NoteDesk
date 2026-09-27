@@ -1,0 +1,68 @@
+name: Can't sign in to Google
+description: Sign-in fails, loops, or Google refuses the browser
+title: "[Sign-in]: "
+labels: ["sign-in"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing this, try Settings → Advanced → Sign-in compatibility: switch from
+        Chrome to Firefox (or Honest), restart NoteDesk, and sign in again. It solves most
+        of these reports on its own.
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Exact error message shown by Google
+      description: Copy the wording as-is, for example "This browser or app may not be secure".
+    validations:
+      required: true
+
+  - type: dropdown
+    id: compat
+    attributes:
+      label: Sign-in compatibility mode you tried
+      description: Settings → Advanced → Sign-in compatibility
+      options:
+        - Chrome (default)
+        - Firefox
+        - Honest (no disguise)
+        - Haven't tried changing it yet
+    validations:
+      required: true
+
+  - type: dropdown
+    id: proxy
+    attributes:
+      label: Are you using a proxy in NoteDesk?
+      options:
+        - "No"
+        - "Yes"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS and version
+      placeholder: "Windows 11 24H2, macOS 15.1, Ubuntu 24.04 ..."
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: NoteDesk version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: account
+    attributes:
+      label: Account type
+      options:
+        - Personal
+        - Workspace
+    validations:
+      required: true

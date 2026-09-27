@@ -1,0 +1,65 @@
+name: Bug report
+description: Something in NoteDesk isn't working the way it should
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, and what went wrong?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: NoteDesk version
+      description: Settings → About
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS and version
+      placeholder: "Windows 11 24H2, macOS 15.1, Ubuntu 24.04 ..."
+    validations:
+      required: true
+
+  - type: input
+    id: theme
+    attributes:
+      label: Theme / tab layout
+      description: Optional, only if it seems related
+      placeholder: "Mica, tabs on top"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Anything relevant from the DevTools console (Ctrl+Shift+I) or NoteDesk's data folder.
+      render: shell
+    validations:
+      required: false
