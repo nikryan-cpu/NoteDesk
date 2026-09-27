@@ -54,9 +54,27 @@ describe('buildPac', () => {
     }
   })
 
+  it('routes the other chat services through the proxy', () => {
+    const findProxy = evalPac(proxy())
+    const token = proxyToken(proxy())
+    for (const host of [
+      'claude.ai',
+      'www.anthropic.com',
+      'chatgpt.com',
+      'auth.openai.com',
+      'oaistatic.com',
+      'oaiusercontent.com',
+      'chat.deepseek.com',
+      'chat.qwen.ai',
+      'challenges.cloudflare.com',
+    ]) {
+      expect(findProxy(`https://${host}/`, host)).toBe(token)
+    }
+  })
+
   it('sends everything else DIRECT, including lookalike domains', () => {
     const findProxy = evalPac(proxy())
-    for (const host of ['github.com', 'example.com', 'evilgoogle.com', 'google.com.evil.org']) {
+    for (const host of ['github.com', 'example.com', 'evilgoogle.com', 'google.com.evil.org', 'notclaude.ai', 'chatgpt.com.evil.org']) {
       expect(findProxy(`https://${host}/`, host)).toBe('DIRECT')
     }
   })

@@ -6,8 +6,8 @@ import {
   SERVICES,
   isAllowedInApp,
   isAuthOrPickerUrl,
-  isGoogleHost,
   isSafeExternal,
+  isTrustedHost,
   parseUrl,
   serviceForUrl,
   type ServiceId,
@@ -57,6 +57,13 @@ interface SavedTab {
 
 let seq = 0
 const newId = () => `t${Date.now().toString(36)}${(++seq).toString(36)}`
+
+/** True for a chat service's sign-in host (e.g. auth.openai.com), so its popups stay in-app. */
+function isServiceAuthHost(raw: string): boolean {
+  const host = parseUrl(raw)?.hostname.toLowerCase()
+  if (!host) return false
+  return Object.values(SERVICES).some((def) => !def.google && def.authHosts.some((h) => host === h || host.endsWith(`.${h}`)))
+}
 
 export class TabManager {
   private tabs: Tab[] = []
@@ -550,7 +557,7 @@ export class TabManager {
 
   private handleWindowOpen(tab: Tab, url: string, disposition: string): Electron.WindowOpenHandlerResponse {
     const parsed = parseUrl(url)
-    if (url === 'about:blank' || isAuthOrPickerUrl(url)) {
+    if (url === 'about:blank' || isAuthOrPickerUrl(url) || isServiceAuthHost(url)) {
       const parent = this.host.parentWindow()
       return {
         action: 'allow',
@@ -582,8 +589,8 @@ export class TabManager {
       }
     })
     wc.setWindowOpenHandler(({ url }) => {
-      if (isAuthOrPickerUrl(url) || url === 'about:blank') return { action: 'allow' }
-      if (isSafeExternal(url) && !isGoogleHost(parseUrl(url)?.hostname ?? '')) void shell.openExternal(url)
+      if (isAuthOrPickerUrl(url) || isServiceAuthHost(url) || url === 'about:blank') return { action: 'allow' }
+      if (isSafeExternal(url) && !isTrustedHost(parseUrl(url)?.hostname ?? '')) void shell.openExternal(url)
       return { action: 'deny' }
     })
     attachContentContextMenu(wc, {})

@@ -25,6 +25,28 @@ describe('cleanTitle', () => {
   it('falls back to the raw trimmed title when stripping would leave nothing', () => {
     expect(cleanTitle('- Gemini Notebook')).toBe('- Gemini Notebook')
   })
+
+  it('strips the " - Claude" suffix', () => {
+    expect(cleanTitle('Trip planning - Claude')).toBe('Trip planning')
+  })
+
+  it('strips the " | ChatGPT" suffix', () => {
+    expect(cleanTitle('Weekly report | ChatGPT')).toBe('Weekly report')
+  })
+
+  it('strips the " - Qwen" suffix', () => {
+    expect(cleanTitle('Essay draft - Qwen')).toBe('Essay draft')
+  })
+
+  it('strips the leading "DeepSeek - " prefix', () => {
+    expect(cleanTitle('DeepSeek - Quantum computing basics')).toBe('Quantum computing basics')
+  })
+
+  it('leaves a bare placeholder title untouched (caught separately by history)', () => {
+    expect(cleanTitle('Claude')).toBe('Claude')
+    expect(cleanTitle('ChatGPT')).toBe('ChatGPT')
+    expect(cleanTitle('DeepSeek')).toBe('DeepSeek')
+  })
 })
 
 describe('fuzzyMatch', () => {

@@ -1,5 +1,5 @@
 // notedesk:// links: notedesk://open?url=<google url>, notedesk://new/gemini, notedesk://quick
-import { isAllowedInApp, type ServiceId } from './services'
+import { isAllowedInApp, SERVICE_IDS, type ServiceId } from './services'
 
 export type DeepLink = { type: 'open'; url: string } | { type: 'new'; service: ServiceId } | { type: 'quick' }
 
@@ -20,7 +20,10 @@ export function parseDeepLink(raw: string): DeepLink | null {
     const target = url.searchParams.get('url') ?? ''
     return isAllowedInApp(target) && target.startsWith('https://') ? { type: 'open', url: target } : null
   }
-  if (route === 'new') return { type: 'new', service: rest === 'gemini' ? 'gemini' : 'notebook' }
+  if (route === 'new') {
+    const service = (SERVICE_IDS as readonly string[]).includes(rest) ? (rest as ServiceId) : 'notebook'
+    return { type: 'new', service }
+  }
   if (route === 'quick') return { type: 'quick' }
   return null
 }

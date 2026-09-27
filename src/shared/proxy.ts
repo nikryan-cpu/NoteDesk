@@ -1,7 +1,7 @@
 // Proxy configuration helpers (pure, unit-tested).
 import type { ProxySettings } from './settings'
 
-/** Domains routed through the proxy in "Google only" mode. */
+/** Domains routed through the proxy in "Google only" mode (also covers the hosted chat services). */
 export const PROXIED_SUFFIXES = [
   '.google',
   'google.com',
@@ -16,6 +16,15 @@ export const PROXIED_SUFFIXES = [
   'google-analytics.com',
   'googletagmanager.com',
   'doubleclick.net',
+  'claude.ai',
+  'anthropic.com',
+  'chatgpt.com',
+  'openai.com',
+  'oaistatic.com',
+  'oaiusercontent.com',
+  'deepseek.com',
+  'qwen.ai',
+  'challenges.cloudflare.com',
 ]
 
 export function proxyToken(p: Pick<ProxySettings, 'scheme' | 'host' | 'port'>): string {

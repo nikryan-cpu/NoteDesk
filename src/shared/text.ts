@@ -1,10 +1,12 @@
 // Small pure text helpers shared by main and renderer.
 
-const TITLE_SUFFIX = /\s*[-–—|·]\s*(?:Gemini Notebook|NotebookLM|Google Gemini|Gemini)\s*$/i
+const TITLE_SUFFIX = /\s*[-–—|·]\s*(?:Gemini Notebook|NotebookLM|Google Gemini|Gemini|Claude|ChatGPT|Qwen)\s*$/i
+// DeepSeek puts its name in front of the chat title instead of after it.
+const TITLE_PREFIX = /^\s*DeepSeek\s*[-–—|·]\s*/i
 
 /** "Physics 101 – Gemini Notebook" → "Physics 101". Falls back to the raw title. */
 export function cleanTitle(title: string): string {
-  const t = title.replace(TITLE_SUFFIX, '').trim()
+  const t = title.replace(TITLE_SUFFIX, '').replace(TITLE_PREFIX, '').trim()
   return t || title.trim()
 }
 

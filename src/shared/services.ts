@@ -162,7 +162,8 @@ export function isAuthOrPickerUrl(raw: string): boolean {
   const url = parseUrl(raw)
   if (!url) return false
   const host = url.hostname.toLowerCase()
-  if (host.startsWith('accounts.google.')) return true
+  // accounts.google.com / accounts.google.ru …, but not accounts.google.evil.com
+  if (host.startsWith('accounts.') && GOOGLE_CCTLD.test(host)) return true
   if (host === 'accounts.youtube.com') return true
   if (host === 'docs.google.com' && url.pathname.startsWith('/picker')) return true
   if (host === 'drive.google.com' && url.pathname.startsWith('/picker')) return true

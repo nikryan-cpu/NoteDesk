@@ -48,7 +48,7 @@ export function updateTitle(url: string, title: string): void {
 }
 
 function isPlaceholderTitle(title: string): boolean {
-  return /^(gemini notebook|notebooklm|gemini|google gemini)$/i.test(title)
+  return /^(gemini notebook|notebooklm|gemini|google gemini|claude|chatgpt|deepseek|qwen|new chat)$/i.test(title)
 }
 
 export function listHistory(): HistoryEntry[] {

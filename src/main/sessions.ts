@@ -1,7 +1,7 @@
 // One persistent Electron session (cookie jar) per NoteDesk profile = per Google account.
 import { session, type Session } from 'electron'
 import { join } from 'node:path'
-import { isGoogleHost, parseUrl } from '@shared/services'
+import { isTrustedHost, parseUrl } from '@shared/services'
 import { applyCompatToSession } from './compat'
 import { attachDownloads } from './downloads'
 import { applyProxy } from './proxy'
@@ -24,9 +24,9 @@ const ALLOWED_PERMISSIONS = new Set([
   'speaker-selection',
 ])
 
-function originIsGoogle(url: string | undefined): boolean {
+function originIsTrusted(url: string | undefined): boolean {
   const host = url ? parseUrl(url)?.hostname : undefined
-  return !!host && isGoogleHost(host)
+  return !!host && isTrustedHost(host)
 }
 
 export function contentPreloadPath(): string {
@@ -43,16 +43,16 @@ export function sessionFor(profileId: string): Session {
   ses.registerPreloadScript({ type: 'frame', id: 'notedesk-content', filePath: contentPreloadPath() })
 
   ses.setPermissionRequestHandler((_wc, permission, callback, details) => {
-    if (!originIsGoogle(details.requestingUrl)) return callback(false)
+    if (!originIsTrusted(details.requestingUrl)) return callback(false)
     if (permission === 'media') {
-      // Microphone for Gemini voice input; never the camera or screen.
+      // Microphone for voice input (Gemini, Claude, ChatGPT, ...); never the camera or screen.
       const types = 'mediaTypes' in details ? (details.mediaTypes ?? []) : []
       return callback(types.length > 0 && types.every((t) => t === 'audio'))
     }
     callback(ALLOWED_PERMISSIONS.has(permission))
   })
   ses.setPermissionCheckHandler((_wc, permission, requestingOrigin) => {
-    return originIsGoogle(requestingOrigin) && ALLOWED_PERMISSIONS.has(permission)
+    return originIsTrusted(requestingOrigin) && ALLOWED_PERMISSIONS.has(permission)
   })
   ses.setDevicePermissionHandler(() => false)
   ses.setDisplayMediaRequestHandler((_req, callback) => callback({}))

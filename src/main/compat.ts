@@ -1,7 +1,6 @@
 // Applies the browser-identity preset (see @shared/compat) to Electron.
 import { app, ipcMain, type Session } from 'electron'
 import { buildCompatProfile, rewriteHeaders, type CompatPreset, type CompatProfile } from '@shared/compat'
-import { isGoogleHost, parseUrl } from '@shared/services'
 
 let profile: CompatProfile
 
@@ -33,9 +32,10 @@ export function applyCompatToSession(ses: Session): void {
   if (profile.preset === 'firefox' && profile.userAgent) ses.setUserAgent(profile.userAgent)
   if (profile.preset === 'electron' || hooked.has(ses)) return
   hooked.add(ses)
+  // Sec-CH-UA headers must match the UA on every https host, not just Google's -- Cloudflare in
+  // front of the other chat services checks them too.
   ses.webRequest.onBeforeSendHeaders({ urls: ['https://*/*'] }, (details, callback) => {
-    const host = parseUrl(details.url)?.hostname
-    if (host && isGoogleHost(host)) rewriteHeaders(details.requestHeaders, profile)
+    rewriteHeaders(details.requestHeaders, profile)
     callback({ requestHeaders: details.requestHeaders })
   })
 }

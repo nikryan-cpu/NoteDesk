@@ -26,8 +26,19 @@ describe('parseDeepLink', () => {
     expect(parseDeepLink('notedesk://new/gemini')).toEqual({ type: 'new', service: 'gemini' })
   })
 
+  it('parses new/<service> for the other chat services', () => {
+    expect(parseDeepLink('notedesk://new/claude')).toEqual({ type: 'new', service: 'claude' })
+    expect(parseDeepLink('notedesk://new/chatgpt')).toEqual({ type: 'new', service: 'chatgpt' })
+    expect(parseDeepLink('notedesk://new/deepseek')).toEqual({ type: 'new', service: 'deepseek' })
+    expect(parseDeepLink('notedesk://new/qwen')).toEqual({ type: 'new', service: 'qwen' })
+  })
+
   it('parses new with no service to notebook', () => {
     expect(parseDeepLink('notedesk://new')).toEqual({ type: 'new', service: 'notebook' })
+  })
+
+  it('falls back to notebook for an unknown service', () => {
+    expect(parseDeepLink('notedesk://new/bogus')).toEqual({ type: 'new', service: 'notebook' })
   })
 
   it('parses quick', () => {
