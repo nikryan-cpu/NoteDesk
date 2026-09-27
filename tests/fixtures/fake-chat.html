@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fake Chat</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex;
+    flex-direction: column;
+    font: 14px/1.5 system-ui, sans-serif;
+    background: #17181c;
+    color: #e8e8ea;
+  }
+  #app { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid #2a2b31;
+  }
+  #model-label { font-weight: 600; text-transform: capitalize; }
+  #account { font-size: 12px; opacity: 0.7; }
+  #messages { flex: 1; overflow-y: auto; padding: 14px; }
+  .msg { margin: 0 0 14px; max-width: 640px; }
+  .msg.user { margin-left: auto; text-align: right; color: #9fd0ff; white-space: pre-wrap; }
+  .msg.assistant .body { white-space: normal; }
+  .msg.assistant .body p { margin: 0 0 8px; }
+  .msg.assistant .body pre { background: #0e0f12; padding: 10px; border-radius: 6px; overflow-x: auto; }
+  .composer-bar { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid #2a2b31; }
+  #prompt { flex: 1; min-height: 44px; resize: vertical; background: #0e0f12; color: inherit; border: 1px solid #2a2b31; border-radius: 6px; padding: 8px; font: inherit; }
+  button { font: inherit; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; }
+  button.send { background: #4b7bec; color: white; }
+  button.stop { background: #e55039; color: white; }
+  #login-form { margin: auto; text-align: center; }
+  #login-form button { background: #4b7bec; color: white; padding: 10px 20px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  'use strict'
+
+  var qs = new URLSearchParams(location.search)
+  var model = qs.get('model') || 'model'
+  var slow = qs.get('slow') === '1'
+  document.title = 'Fake Chat - ' + model
+
+  var app = document.getElementById('app')
+  var messagesEl = null
+  var promptEl = null
+  var sendBtn = null
+  var stopBtn = null
+  var currentChatId = null
+  var inChatView = false
+  var currentStopFn = null
+
+  function escapeHtml(s) {
+    var map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+    return String(s).replace(/[&<>"']/g, function (c) { return map[c] })
+  }
+
+  function signedIn() {
+    try {
+      return localStorage.getItem('fake-signed-in') !== 'no'
+    } catch (e) {
+      return true
+    }
+  }
+
+  function loadChat(id) {
+    try {
+      var raw = localStorage.getItem('fake-chat:' + id)
+      if (raw) return JSON.parse(raw)
+    } catch (e) {
+      // storage unavailable or corrupt - start fresh
+    }
+    return { turns: [] }
+  }
+
+  function saveChat(id, data) {
+    try {
+      localStorage.setItem('fake-chat:' + id, JSON.stringify(data))
+    } catch (e) {
+      // storage unavailable - the chat still works for this page load
+    }
+  }
+
+  function showLogin() {
+    app.innerHTML =
+      '<div id="login-form">' +
+      '<h1>Sign in to ' + escapeHtml(model) + '</h1>' +
+      '<button id="signin-btn" type="button">Sign in</button>' +
+      '</div>'
+    document.getElementById('signin-btn').addEventListener('click', function () {
+      try {
+        localStorage.setItem('fake-signed-in', 'yes')
+      } catch (e) {
+        // ignore - render() will still take us to #/
+      }
+      location.hash = '#/'
+    })
+  }
+
+  function appendUserMessage(text) {
+    var msg = document.createElement('div')
+    msg.className = 'msg user'
+    msg.textContent = text
+    messagesEl.appendChild(msg)
+    messagesEl.scrollTop = messagesEl.scrollHeight
+  }
+
+  function startAssistantMessage() {
+    var msg = document.createElement('div')
+    msg.className = 'msg assistant'
+    var body = document.createElement('div')
+    body.className = 'body'
+    msg.appendChild(body)
+    messagesEl.appendChild(msg)
+    return body
+  }
+
+  function renderStoredMessages(id) {
+    var stored = loadChat(id)
+    for (var i = 0; i < stored.turns.length; i++) {
+      var t = stored.turns[i]
+      appendUserMessage(t.prompt)
+      var msg = document.createElement('div')
+      msg.className = 'msg assistant'
+      var body = document.createElement('div')
+      body.className = 'body'
+      body.innerHTML = t.replyHtml
+      msg.appendChild(body)
+      messagesEl.appendChild(msg)
+    }
+  }
+
+  // Word-by-word reply, built as real DOM nodes (never innerHTML of the prompt itself) so a
+  // prompt containing "<" or "&" cannot break the page.
+  function buildReplyChunks(replyModel, prompt, turnIndex) {
+    var words = ('reply to: ' + prompt + ' (turn ' + turnIndex + ')').split(/\s+/)
+    var chunks = [{ type: 'open-strong' }, { type: 'text', value: replyModel }, { type: 'close-strong' }]
+    for (var i = 0; i < words.length; i++) {
+      chunks.push({ type: 'text', value: ' ' + words[i] })
+    }
+    chunks.push({ type: 'open-ul' })
+    chunks.push({ type: 'li', value: 'item one' })
+    chunks.push({ type: 'li', value: 'item two' })
+    chunks.push({ type: 'close-ul' })
+    chunks.push({ type: 'code', value: 'console.log(1)' })
+    return chunks
+  }
+
+  function streamReply(body, chunks, onDone) {
+    var i = 0
+    var strongEl = null
+    var ulEl = null
+    var delay = slow ? 160 : 40
+
+    function applyChunk(c) {
+      if (c.type === 'open-strong') {
+        strongEl = document.createElement('strong')
+        body.appendChild(strongEl)
+      } else if (c.type === 'text') {
+        var target = strongEl || body
+        target.appendChild(document.createTextNode(c.value))
+      } else if (c.type === 'close-strong') {
+        strongEl = null
+      } else if (c.type === 'open-ul') {
+        ulEl = document.createElement('ul')
+        body.appendChild(ulEl)
+      } else if (c.type === 'li') {
+        var li = document.createElement('li')
+        li.textContent = c.value
+        ulEl.appendChild(li)
+      } else if (c.type === 'close-ul') {
+        ulEl = null
+      } else if (c.type === 'code') {
+        var pre = document.createElement('pre')
+        var code = document.createElement('code')
+        code.className = 'language-js'
+        code.textContent = c.value
+        pre.appendChild(code)
+        body.appendChild(pre)
+      }
+    }
+
+    var timer = setInterval(step, delay)
+
+    function finish() {
+      clearInterval(timer)
+      currentStopFn = null
+      onDone()
+    }
+
+    function step() {
+      if (i >= chunks.length) { finish(); return }
+      applyChunk(chunks[i])
+      i++
+      messagesEl.scrollTop = messagesEl.scrollHeight
+      if (i >= chunks.length) finish()
+    }
+
+    currentStopFn = finish
+  }
+
+  function handleSend() {
+    var text = promptEl.value
+    if (!text || !text.trim()) return
+    if (currentStopFn) return // already generating
+
+    if (!currentChatId) {
+      currentChatId = 'chat-' + Math.random().toString(36).slice(2, 10)
+      location.hash = '#/c/' + currentChatId
+    }
+
+    var stored = loadChat(currentChatId)
+    var turnIndex = stored.turns.length
+
+    appendUserMessage(text)
+    promptEl.value = ''
+
+    var body = startAssistantMessage()
+    sendBtn.hidden = true
+    stopBtn.hidden = false
+
+    var chunks = buildReplyChunks(model, text, turnIndex)
+    streamReply(body, chunks, function () {
+      sendBtn.hidden = false
+      stopBtn.hidden = true
+      stored.turns.push({ prompt: text, replyHtml: body.innerHTML })
+      saveChat(currentChatId, stored)
+    })
+  }
+
+  function showChat(chatId) {
+    app.innerHTML =
+      '<header>' +
+      '<span id="model-label">' + escapeHtml(model) + '</span>' +
+      '<span id="account">Signed in</span>' +
+      '</header>' +
+      '<div id="messages"></div>' +
+      '<div class="composer-bar">' +
+      '<textarea id="prompt" placeholder="Ask anything"></textarea>' +
+      '<button class="send" type="button">Send</button>' +
+      '<button class="stop" type="button" hidden>Stop</button>' +
+      '</div>'
+
+    messagesEl = document.getElementById('messages')
+    promptEl = document.getElementById('prompt')
+    sendBtn = document.querySelector('button.send')
+    stopBtn = document.querySelector('button.stop')
+
+    if (chatId) renderStoredMessages(chatId)
+
+    sendBtn.addEventListener('click', handleSend)
+    stopBtn.addEventListener('click', function () {
+      if (currentStopFn) currentStopFn()
+    })
+    promptEl.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        handleSend()
+      }
+      // Shift+Enter: let the browser insert the newline itself
+    })
+  }
+
+  function render() {
+    var hash = location.hash || '#/'
+
+    if (!signedIn() && hash !== '#/login') {
+      location.hash = '#/login'
+      return
+    }
+    if (signedIn() && hash === '#/login') {
+      location.hash = '#/'
+      return
+    }
+
+    if (hash === '#/login') {
+      showLogin()
+      inChatView = false
+      currentChatId = null
+      return
+    }
+
+    var m = /^#\/c\/([\w-]+)$/.exec(hash)
+    var id = m ? m[1] : null
+
+    if (!inChatView) {
+      showChat(id)
+      inChatView = true
+    }
+    // Once already in the chat view, a hash move between #/ and #/c/<id> (from our own send)
+    // just tracks the id - the message list already on screen does not need rebuilding.
+    currentChatId = id || currentChatId
+  }
+
+  window.addEventListener('hashchange', render)
+  render()
+})()
+</script>
+</body>
+</html>

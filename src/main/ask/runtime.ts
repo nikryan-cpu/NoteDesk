@@ -40,6 +40,38 @@ export function installRuntime(config: PageConfig): void {
     h6: true,
     figure: true,
     form: true,
+    hr: true,
+  }
+
+  // Elements that flow with the surrounding text instead of starting their own paragraph -
+  // a streamed answer often lands as many of these (and bare text nodes) as direct siblings,
+  // with no <p> wrapper at all, and they must all read as one paragraph.
+  const INLINE_TAGS: Record<string, boolean> = {
+    strong: true,
+    b: true,
+    em: true,
+    i: true,
+    del: true,
+    s: true,
+    strike: true,
+    code: true,
+    a: true,
+    img: true,
+    br: true,
+    span: true,
+    sub: true,
+    sup: true,
+    u: true,
+    mark: true,
+    small: true,
+    abbr: true,
+    kbd: true,
+    cite: true,
+    q: true,
+    time: true,
+    label: true,
+    input: true,
+    wbr: true,
   }
 
   // Header elements next to a <pre> that were used only to label its language (or that hold
@@ -347,6 +379,22 @@ export function installRuntime(config: PageConfig): void {
     return false
   }
 
+  // A streamed answer is often just text nodes and inline tags (strong, code, a, a bare
+  // <span>...) landing directly as siblings with no <p> around them at all - those must flow
+  // together into one paragraph. Only a real block element starts a new one.
+  function isInlineNode(node: Node): boolean {
+    if (node.nodeType === 3) return true
+    if (node.nodeType !== 1) return false
+    const el = node as Element
+    if (isMathRoot(el)) return true
+    const tag = el.tagName.toLowerCase()
+    if (INLINE_TAGS[tag]) return true
+    if (BLOCK_TAGS[tag]) return false
+    // an unfamiliar tag (custom element, site-specific wrapper): treat it as part of the
+    // running paragraph unless it is itself built from block-level pieces
+    return !containsBlockChild(el)
+  }
+
   function tidyInline(s: string): string {
     return s
       .replace(/[ \t]{2,}/g, ' ')
@@ -424,17 +472,10 @@ export function installRuntime(config: PageConfig): void {
       ''
     if (dataLang) return dataLang.toLowerCase()
 
-    const headers: Element[] = []
-    if (pre.previousElementSibling) headers.push(pre.previousElementSibling)
-    const parent = pre.parentElement
-    if (parent && parent.firstElementChild && parent.firstElementChild !== pre) {
-      headers.push(parent.firstElementChild)
-    }
-    for (let i = 0; i < headers.length; i++) {
-      const label = extractLangLabel(headers[i])
-      if (label) return label
-    }
-    return ''
+    // Only a header genuinely right before the <pre> counts - not just "some element that
+    // happens to be the first child of a big shared container", which could be anything.
+    const header = pre.previousElementSibling
+    return header ? extractLangLabel(header) : ''
   }
 
   function renderCodeBlock(pre: Element): string {
@@ -545,25 +586,61 @@ export function installRuntime(config: PageConfig): void {
     return s.replace(/\|/g, '\\|').replace(/\n+/g, '<br>')
   }
 
+  // th/td via .children rather than HTMLTableRowElement.cells, and ancestor walk rather than
+  // .tHead - the specialised table DOM interfaces are not reliably implemented everywhere.
+  function rowCells(row: Element): Element[] {
+    const out: Element[] = []
+    const kids = row.children
+    for (let i = 0; i < kids.length; i++) {
+      const tag = kids[i].tagName.toLowerCase()
+      if (tag === 'td' || tag === 'th') out.push(kids[i])
+    }
+    return out
+  }
+
+  function rowIsHeader(row: Element, table: Element, cells: Element[]): boolean {
+    if (cells.length > 0) {
+      let allTh = true
+      for (let i = 0; i < cells.length; i++) {
+        if (cells[i].tagName.toLowerCase() !== 'th') {
+          allTh = false
+          break
+        }
+      }
+      if (allTh) return true
+    }
+    let node: Element | null = row.parentElement
+    while (node && node !== table) {
+      if (node.tagName.toLowerCase() === 'thead') return true
+      node = node.parentElement
+    }
+    return false
+  }
+
   function renderTable(tableEl: Element): string {
-    const table = tableEl as HTMLTableElement
-    const rows = table.rows
-    if (!rows || rows.length === 0) return ''
-    const headerRowCount = table.tHead ? table.tHead.rows.length || 1 : 1
-    const headerIndex = Math.min(headerRowCount, rows.length) - 1
-    const headerCells = rows[headerIndex] ? rows[headerIndex].cells : null
-    const colCount = headerCells ? headerCells.length : rows[0].cells.length
+    const rows = safeQueryAll(tableEl, 'tr')
+    if (rows.length === 0) return ''
+
+    let headerRowCount = 0
+    for (let i = 0; i < rows.length; i++) {
+      if (!rowIsHeader(rows[i], tableEl, rowCells(rows[i]))) break
+      headerRowCount = i + 1
+    }
+    if (headerRowCount === 0) headerRowCount = 1
+
+    const headerCells = rowCells(rows[headerRowCount - 1])
+    const colCount = headerCells.length || rowCells(rows[0]).length
     if (colCount === 0) return ''
 
     const headerTexts: string[] = []
     for (let c = 0; c < colCount; c++) {
-      headerTexts.push(headerCells && headerCells[c] ? cellText(headerCells[c]) : '')
+      headerTexts.push(headerCells[c] ? cellText(headerCells[c]) : '')
     }
     const lines: string[] = []
     lines.push('| ' + headerTexts.join(' | ') + ' |')
     lines.push('| ' + headerTexts.map(() => '---').join(' | ') + ' |')
-    for (let r = headerIndex + 1; r < rows.length; r++) {
-      const cells = rows[r].cells
+    for (let r = headerRowCount; r < rows.length; r++) {
+      const cells = rowCells(rows[r])
       const rowTexts: string[] = []
       for (let c = 0; c < colCount; c++) {
         rowTexts.push(cells[c] ? cellText(cells[c]) : '')
@@ -579,7 +656,7 @@ export function installRuntime(config: PageConfig): void {
     const el = node as Element
     if (shouldSkipElement(el)) return ''
     const math = mathMarkdown(el)
-    if (math !== null) return ' ' + math + ' '
+    if (math !== null) return math
 
     const tag = el.tagName.toLowerCase()
     if (tag === 'br') return '\n'
@@ -601,18 +678,22 @@ export function installRuntime(config: PageConfig): void {
     return renderInline(el)
   }
 
-  function renderInline(el: Node): string {
+  function joinInlineNodes(nodes: Node[]): string {
     const parts: string[] = []
-    const kids = el.childNodes
-    for (let i = 0; i < kids.length; i++) parts.push(renderInlineNode(kids[i]))
+    for (let i = 0; i < nodes.length; i++) parts.push(renderInlineNode(nodes[i]))
     return tidyInline(parts.join(''))
   }
 
+  function renderInline(el: Node): string {
+    const kids: Node[] = []
+    const list = el.childNodes
+    for (let i = 0; i < list.length; i++) kids.push(list[i])
+    return joinInlineNodes(kids)
+  }
+
+  // Only ever reached for a node isInlineNode() already said no to, so it is always a real
+  // block element (a bare text node never lands here).
   function renderBlockChild(node: Node): string | null {
-    if (node.nodeType === 3) {
-      const t = (node.textContent || '').replace(/\s+/g, ' ').trim()
-      return t || null
-    }
     if (node.nodeType !== 1) return null
     const el = node as Element
     if (shouldSkipElement(el)) return null
@@ -620,7 +701,6 @@ export function installRuntime(config: PageConfig): void {
     if (math !== null) return math
 
     const tag = el.tagName.toLowerCase()
-    if (tag === 'br' || tag === 'template') return null
     if (/^h[1-6]$/.test(tag)) {
       const level = parseInt(tag.slice(1), 10)
       const text = renderInline(el)
@@ -632,7 +712,6 @@ export function installRuntime(config: PageConfig): void {
     if (tag === 'blockquote') return renderBlockquote(el) || null
     if (tag === 'pre') return renderCodeBlock(el)
     if (tag === 'table') return renderTable(el) || null
-    if (tag === 'img') return imageMd(el) || null
     if (tag === 'p' || tag === 'li') {
       const text = renderInline(el)
       return text || null
@@ -642,13 +721,32 @@ export function installRuntime(config: PageConfig): void {
     return text || null
   }
 
+  // Consecutive inline children (text nodes, <strong>/<code>/<a>/... - anything isInlineNode
+  // accepts) are buffered and rendered as one paragraph; a real block element flushes that
+  // buffer first and then renders as its own block.
   function renderBlock(root: Node): string {
     const parts: string[] = []
+    let buffer: Node[] = []
+
+    function flush(): void {
+      if (buffer.length === 0) return
+      const text = joinInlineNodes(buffer)
+      if (text) parts.push(text)
+      buffer = []
+    }
+
     const kids = root.childNodes
     for (let i = 0; i < kids.length; i++) {
-      const s = renderBlockChild(kids[i])
+      const node = kids[i]
+      if (isInlineNode(node)) {
+        buffer.push(node)
+        continue
+      }
+      flush()
+      const s = renderBlockChild(node)
       if (s) parts.push(s)
     }
+    flush()
     return parts.join('\n\n')
   }
 
@@ -667,20 +765,11 @@ export function installRuntime(config: PageConfig): void {
     if (root.tagName.toLowerCase() === 'pre' && pres.indexOf(root) === -1) pres.push(root)
     for (let i = 0; i < pres.length; i++) {
       const pre = pres[i]
-      const headers: Element[] = []
-      if (pre.previousElementSibling) headers.push(pre.previousElementSibling)
-      const parent = pre.parentElement
-      if (parent && parent.firstElementChild && parent.firstElementChild !== pre) headers.push(parent.firstElementChild)
-      for (let j = 0; j < headers.length; j++) {
-        const header = headers[j]
-        if (isConsumedHeader(header)) continue
-        const label = extractLangLabel(header)
-        const chromeOnly = !label && renderInline(header).trim() === ''
-        if (label || chromeOnly) {
-          consumedHeaders.push(header)
-          break
-        }
-      }
+      const header = pre.previousElementSibling
+      if (!header || isConsumedHeader(header)) continue
+      const label = extractLangLabel(header)
+      const chromeOnly = !label && renderInline(header).trim() === ''
+      if (label || chromeOnly) consumedHeaders.push(header)
     }
   }
 
