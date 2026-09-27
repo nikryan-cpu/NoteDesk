@@ -38,6 +38,7 @@
   button.stop { background: #e55039; color: white; }
   #login-form { margin: auto; text-align: center; }
   #login-form button { background: #4b7bec; color: white; padding: 10px 20px; }
+  #notice, .toast { margin: 0 14px 10px; padding: 8px 12px; border-radius: 6px; background: #4a2a2a; color: #ffb4b4; font-size: 13px; }
   .option-bar { display: flex; gap: 8px; align-items: center; padding: 8px 14px; border-top: 1px solid #2a2b31; }
   .option-bar button { background: #232428; color: inherit; }
   .option-bar button[aria-pressed="true"] { background: #4b7bec; color: white; }
@@ -229,10 +230,56 @@
     currentStopFn = finish
   }
 
+  // A prior notice or toast never survives into the next send - a real service clears its own
+  // banner once you try again too.
+  function clearNotice() {
+    var notice = document.getElementById('notice')
+    if (notice && notice.parentNode) notice.parentNode.removeChild(notice)
+    var toasts = document.querySelectorAll('.toast')
+    for (var i = 0; i < toasts.length; i++) {
+      if (toasts[i].parentNode) toasts[i].parentNode.removeChild(toasts[i])
+    }
+  }
+
+  function insertNearComposer(el) {
+    var bar = document.querySelector('.composer-bar')
+    bar.parentNode.insertBefore(el, bar)
+  }
+
+  function showLimitNotice() {
+    var notice = document.createElement('div')
+    notice.id = 'notice'
+    notice.setAttribute('role', 'alert')
+    notice.textContent = "You've reached your message limit. Try again after 5 PM."
+    insertNearComposer(notice)
+  }
+
+  function showBusyToast() {
+    var toast = document.createElement('div')
+    toast.className = 'toast'
+    toast.textContent = 'The server is busy. Please try again later.'
+    insertNearComposer(toast)
+  }
+
   function handleSend() {
     var text = promptEl.value
     if (!text || !text.trim()) return
     if (currentStopFn) return // already generating
+
+    clearNotice()
+
+    if (text.indexOf('#limit') !== -1) {
+      appendUserMessage(text)
+      promptEl.value = ''
+      showLimitNotice()
+      return
+    }
+    if (text.indexOf('#busy') !== -1) {
+      appendUserMessage(text)
+      promptEl.value = ''
+      showBusyToast()
+      return
+    }
 
     if (!currentChatId) {
       currentChatId = 'chat-' + Math.random().toString(36).slice(2, 10)

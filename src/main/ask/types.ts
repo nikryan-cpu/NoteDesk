@@ -22,6 +22,11 @@ export interface PageConfig {
   signedIn: string[]
   /** Elements that must not end up in the answer text (buttons, feedback bars, citations UI). */
   strip?: string[]
+  /**
+   * Where the service shows errors and limits (banners, toasts, inline error blocks). Generic
+   * places ([role="alert"], toasts) are checked too.
+   */
+  notices?: string[]
   /** How to submit after the prompt is typed. */
   submitWith: 'enter' | 'button'
   /** How to switch deeper reasoning on and off. */
@@ -101,6 +106,11 @@ export interface PageProbe {
   answerCount: number
   /** The newest assistant message converted to Markdown ('' when there is none). */
   lastAnswer: string
+  /**
+   * Visible error / limit / "busy" message shown by the service (trimmed text, ≤ 300 chars), or
+   * null. Only messages that appeared on the page matter; old ones in the history do not.
+   */
+  notice: string | null
 }
 
 /**

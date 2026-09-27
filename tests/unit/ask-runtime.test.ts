@@ -210,6 +210,69 @@ describe('probe: answerCount / lastAnswer', () => {
   })
 })
 
+describe('probe: notice', () => {
+  it('prefers the adapter-configured notices selector', () => {
+    document.body.innerHTML = '<div id="banner">You have reached your usage limit for today.</div><div role="alert">busy elsewhere</div>'
+    install({ ...base, notices: ['#banner'] })
+    expect(window.__ndAsk!.probe().notice).toBe('You have reached your usage limit for today.')
+  })
+
+  it('falls back to a generic [role="alert"] banner when no adapter selector matches', () => {
+    document.body.innerHTML = '<div role="alert">Too many requests, please slow down.</div>'
+    install(base)
+    expect(window.__ndAsk!.probe().notice).toBe('Too many requests, please slow down.')
+  })
+
+  it('ignores wording that only lives inside an assistant message', () => {
+    document.body.innerHTML = '<div class="msg" role="alert">There is a limit to how fast light can travel.</div>'
+    install(base)
+    expect(window.__ndAsk!.probe().notice).toBe(null)
+  })
+
+  it('ignores an invisible notice', () => {
+    document.body.innerHTML = '<div role="alert" style="display:none">You have reached your limit.</div>'
+    install(base)
+    expect(window.__ndAsk!.probe().notice).toBe(null)
+  })
+
+  it('an aria-live=polite region only counts once its text looks like an error', () => {
+    document.body.innerHTML = '<div aria-live="polite">Message sent</div>'
+    install(base)
+    expect(window.__ndAsk!.probe().notice).toBe(null)
+
+    document.body.innerHTML = '<div aria-live="polite">You have hit your rate limit.</div>'
+    install(base)
+    expect(window.__ndAsk!.probe().notice).toBe('You have hit your rate limit.')
+  })
+
+  it('finds a toast container by class name', () => {
+    document.body.innerHTML = '<div class="Toastify__toast">The server is busy. Please try again later.</div>'
+    install(base)
+    expect(window.__ndAsk!.probe().notice).toBe('The server is busy. Please try again later.')
+  })
+
+  it('only trusts an [class*="error"] element next to the composer or the newest answer', () => {
+    document.body.innerHTML =
+      '<header class="error-boundary">unrelated page chrome mentioning a quota exceeded somewhere far away</header>' +
+      '<main><div class="composer-bar"><textarea id="prompt"></textarea></div></main>'
+    install({ ...base, composer: ['#prompt'] })
+    expect(window.__ndAsk!.probe().notice).toBe(null)
+  })
+
+  it('trusts an [class*="error"] element that sits with the composer', () => {
+    document.body.innerHTML =
+      '<div id="app"><div class="send-error">Too many requests, please wait a moment.</div><div class="composer-bar"><textarea id="prompt"></textarea></div></div>'
+    install({ ...base, composer: ['#prompt'] })
+    expect(window.__ndAsk!.probe().notice).toBe('Too many requests, please wait a moment.')
+  })
+
+  it('is null when nothing on the page looks like a notice', () => {
+    document.body.innerHTML = '<div class="msg">hello there</div>'
+    install(base)
+    expect(window.__ndAsk!.probe().notice).toBe(null)
+  })
+})
+
 describe('focusComposer', () => {
   it('clears a textarea and returns true', () => {
     document.body.innerHTML = '<textarea id="prompt">leftover text</textarea>'

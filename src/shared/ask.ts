@@ -11,6 +11,7 @@ export type ModelState =
   | 'ready' // signed in, prompt box found
   | 'signed-out' // the service wants a sign-in
   | 'needs-action' // captcha / "are you human" / consent page the user has to pass
+  | 'limited' // the service says a usage limit is reached or it is too busy right now
   | 'error' // page failed to load or its layout was not recognised
 
 export interface ModelStatus {
@@ -30,6 +31,7 @@ export type AnswerStatus =
   | 'error'
   | 'signed-out'
   | 'needs-action'
+  | 'limited' // usage limit / rate limit / "server is busy"; `error` holds the service's own words
 
 export interface AskAnswer {
   model: ModelId

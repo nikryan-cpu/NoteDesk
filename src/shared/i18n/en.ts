@@ -438,6 +438,7 @@ export const en = {
   'askWarn.variant': "Couldn't switch to {name}",
   'askWarn.thinking': "Couldn't switch reasoning",
   'askWarn.search': "Couldn't switch web search",
+  'ask.status.limited': 'Limited',
 } as const
 
 export type I18nKey = keyof typeof en

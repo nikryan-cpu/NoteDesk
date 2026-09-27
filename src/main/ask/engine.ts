@@ -53,8 +53,22 @@ const STREAM_PUSH_MS = 250
 const STREAM_QUIET_WITH_STOP_MS = 1_500
 const STREAM_QUIET_NO_STOP_MS = 4_000
 const HARD_TIMEOUT_MS = 6 * 60_000
+// How long a notice gets to prove itself wrong (an answer starting late) before it is treated
+// as the reason nothing is happening.
+const NOTICE_GRACE_MS = 5_000
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+// Words a limit/quota/rate/busy notice tends to use, in whatever language the service replies
+// with - anything else that reached probe.notice is still an error, just not that kind.
+const LIMIT_NOTICE_RE = /limit|quota|too many|busy|capacity|overloaded|exceeded|лимит|превышен|слишком много|перегружен|频繁|上限|繁忙/i
+
+/** Buckets a service's own notice text: a limit/rate/busy message, or some other error. */
+export function classifyNotice(text: string): 'limited' | 'error' | null {
+  const trimmed = text.trim()
+  if (!trimmed) return null
+  return LIMIT_NOTICE_RE.test(trimmed) ? 'limited' : 'error'
+}
 
 function sameLocation(a: string, b: string): boolean {
   try {
@@ -488,6 +502,36 @@ export class AskEngine {
     return this.runInWorld(page, adapter, PROBE_SCRIPT).then((r) => (r as PageProbe | undefined) ?? null)
   }
 
+  /**
+   * Waits for the usual "it started" signal (a new assistant message, or a stop button) - but if
+   * a notice shows up instead, it gets NOTICE_GRACE_MS to be proven wrong by an answer starting
+   * late before it counts as the reason nothing is happening.
+   */
+  private async waitForSendOutcome(
+    page: ModelPage,
+    adapter: ModelAdapter,
+    baseline: number,
+    timeoutMs: number,
+  ): Promise<{ probe: PageProbe | null; blocked: string | null }> {
+    let deadline = Date.now() + timeoutMs
+    let noticeSince: number | null = null
+    for (;;) {
+      const probe = await this.probe(page, adapter)
+      if (probe && (probe.answerCount > baseline || probe.generating)) return { probe, blocked: null }
+      if (probe?.notice) {
+        if (noticeSince === null) {
+          noticeSince = Date.now()
+          deadline = Math.max(deadline, noticeSince + NOTICE_GRACE_MS)
+        }
+        if (Date.now() - noticeSince >= NOTICE_GRACE_MS) return { probe, blocked: probe.notice }
+      } else {
+        noticeSince = null
+      }
+      if (Date.now() >= deadline) return { probe, blocked: probe?.notice ?? null }
+      await sleep(300)
+    }
+  }
+
   /** Switches variant/thinking/search on the page to match `options`. Returns short warnings for switches that failed. */
   private async applyOptions(page: ModelPage, adapter: ModelAdapter, options: ModelOptions): Promise<string[]> {
     const warnings: string[] = []
@@ -509,9 +553,10 @@ export class AskEngine {
     return warnings
   }
 
-  /** The page has settled into something we can act on: a composer, a sign-in wall, or a challenge. */
+  /** The page has settled into something we can act on: a composer, a sign-in wall, a challenge -
+   * or a notice, since that can be the whole reason there is no composer at all. */
   private isSettled(adapter: ModelAdapter, p: PageProbe): boolean {
-    return p.composer || p.signedIn === false || p.challenge || adapter.isLoginUrl(p.url)
+    return p.composer || p.signedIn === false || p.challenge || adapter.isLoginUrl(p.url) || !!p.notice
   }
 
   private async waitFor(
@@ -542,6 +587,7 @@ export class AskEngine {
       if (adapter.isLoginUrl(probe.url) || probe.signedIn === false) return this.setModelState(model, 'signed-out')
       if (probe.challenge) return this.setModelState(model, 'needs-action')
       if (probe.composer) return this.setModelState(model, 'ready')
+      if (probe.notice) return this.setModelState(model, classifyNotice(probe.notice) ?? 'error', probe.notice)
       this.setModelState(model, 'error', 'prompt box not found')
     } catch (err) {
       console.warn('[ask] checkModels failed for', model, err)
@@ -650,6 +696,13 @@ export class AskEngine {
       return
     }
     if (!ready.composer) {
+      if (ready.notice) {
+        const kind = classifyNotice(ready.notice) ?? 'error'
+        setAnswer({ status: kind, error: ready.notice, finishedAt: Date.now() })
+        this.setModelState(handle.model, kind, ready.notice)
+        this.pushConversations()
+        return
+      }
       setAnswer({ status: 'error', error: 'prompt box not found — the site may have changed' })
       this.setModelState(handle.model, 'error', 'prompt box not found')
       this.pushConversations()
@@ -693,17 +746,26 @@ export class AskEngine {
     page.lastActivity = Date.now()
     if (handle.cancelled) return this.markStopped(handle)
 
-    let sent = await this.waitFor(page, adapter, (p) => p.answerCount > baseline || p.generating, SEND_CONFIRM_MS)
+    let outcome = await this.waitForSendOutcome(page, adapter, baseline, SEND_CONFIRM_MS)
     if (handle.cancelled) return this.markStopped(handle)
-    if (!sent || (sent.answerCount <= baseline && !sent.generating)) {
+    const notSentYet = (o: typeof outcome): boolean => !o.blocked && (!o.probe || (o.probe.answerCount <= baseline && !o.probe.generating))
+    if (notSentYet(outcome)) {
       const leftover = await this.runInWorld(page, adapter, COMPOSER_TEXT_SCRIPT)
       const stillThere = typeof leftover === 'string' && prompt.trim().length > 0 && leftover.includes(prompt.trim().slice(0, 40))
       if (stillThere) {
         await typeAndSubmit(adapter.page.submitWith === 'enter' ? 'button' : 'enter')
-        sent = await this.waitFor(page, adapter, (p) => p.answerCount > baseline || p.generating, SEND_RETRY_MS)
+        outcome = await this.waitForSendOutcome(page, adapter, baseline, SEND_RETRY_MS)
       }
     }
     if (handle.cancelled) return this.markStopped(handle)
+    if (outcome.blocked) {
+      const kind = classifyNotice(outcome.blocked) ?? 'error'
+      setAnswer({ status: kind, error: outcome.blocked, finishedAt: Date.now() })
+      this.setModelState(handle.model, kind, outcome.blocked)
+      this.pushConversations()
+      return
+    }
+    const sent = outcome.probe
     if (!sent || (sent.answerCount <= baseline && !sent.generating)) {
       setAnswer({ status: 'error', error: 'could not send' })
       this.pushConversations()
@@ -758,8 +820,20 @@ export class AskEngine {
         }
       }
       if (!probe.generating && Date.now() - lastChangeAt >= quietFor) {
-        if (lastText) setAnswer({ status: 'done', markdown: lastText, finishedAt: Date.now() })
-        else setAnswer({ status: 'error', error: 'no answer appeared', finishedAt: Date.now() })
+        // An answer that streamed in is kept as-is even if a notice also showed up somewhere -
+        // only an empty answer falls back to explaining itself with the service's own words.
+        if (lastText) {
+          setAnswer({ status: 'done', markdown: lastText, finishedAt: Date.now() })
+          break
+        }
+        if (probe.notice) {
+          const kind = classifyNotice(probe.notice) ?? 'error'
+          setAnswer({ status: kind, error: probe.notice, finishedAt: Date.now() })
+          this.setModelState(handle.model, kind, probe.notice)
+          this.pushConversations()
+          return
+        }
+        setAnswer({ status: 'error', error: 'no answer appeared', finishedAt: Date.now() })
         break
       }
       await sleep(STREAM_POLL_MS)

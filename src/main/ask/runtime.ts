@@ -1215,6 +1215,97 @@ export function installRuntime(config: PageConfig): void {
     }
   }
 
+  // --- notices: a visible error / limit / "busy" message, but never wording lifted out of a
+  // chat message (an answer that happens to discuss "limits" must not be mistaken for one) ---
+
+  const NOTICE_TEXT_RE =
+    /limit|usage cap|quota|too many requests|rate limit|try again later|try again in|reached|exceeded|capacity|busy|overloaded|something went wrong|network error|лимит|превышен|слишком много|попробуйте позже|服务器繁忙|请稍后|频繁|上限/i
+
+  function elementText(el: Element): string {
+    return (el.textContent || '').replace(/\s+/g, ' ').trim()
+  }
+
+  // Same idea as isSensitiveRoot below, reused here so a banner nested inside a message (or the
+  // composer's own placeholder) never counts as a notice.
+  function isInsideMessage(el: Element): boolean {
+    let node: Element | null = el
+    while (node) {
+      if (matchesAny(node, config.assistant)) return true
+      if (matchesAny(node, config.composer)) return true
+      if (looksLikeUserMessage(node)) return true
+      node = node.parentElement
+    }
+    return false
+  }
+
+  // The lowest element both `a` and `b` sit under - used to tell "next to the composer" apart
+  // from "anywhere at all on the page", without needing to know a site's own layout.
+  function commonAncestor(a: Element, b: Element): Element | null {
+    const chain: Element[] = []
+    let node: Element | null = a
+    while (node) {
+      chain.push(node)
+      node = node.parentElement
+    }
+    node = b
+    while (node) {
+      if (chain.indexOf(node) !== -1) return node
+      node = node.parentElement
+    }
+    return null
+  }
+
+  function isNear(el: Element, other: Element | null): boolean {
+    if (!other) return false
+    const nca = commonAncestor(el, other)
+    return !!nca && nca !== document.body && nca !== document.documentElement
+  }
+
+  function findFirstNotice(selectors: string[], requireWording: boolean): string | null {
+    for (let i = 0; i < selectors.length; i++) {
+      const els = safeQueryAll(document, selectors[i])
+      for (let j = 0; j < els.length; j++) {
+        const el = els[j]
+        if (!visible(el) || isInsideMessage(el)) continue
+        const text = elementText(el)
+        if (!text) continue
+        if (requireWording && !NOTICE_TEXT_RE.test(text)) continue
+        return text
+      }
+    }
+    return null
+  }
+
+  // "error" shows up in class names for all sorts of unrelated chrome, so this one is only
+  // trusted when it sits next to the composer or right after the newest answer.
+  function findErrorClassNotice(): string | null {
+    const els = safeQueryAll(document, '[class*="error" i]')
+    if (els.length === 0) return null
+    const composerEl = locateComposer()
+    const assistantEls = findAssistantMessages()
+    const lastAnswerEl = assistantEls.length ? assistantEls[assistantEls.length - 1] : null
+    const scoped = !!(composerEl || lastAnswerEl)
+    for (let i = 0; i < els.length; i++) {
+      const el = els[i]
+      if (!visible(el) || isInsideMessage(el)) continue
+      if (scoped && !isNear(el, composerEl) && !isNear(el, lastAnswerEl)) continue
+      const text = elementText(el)
+      if (!text || !NOTICE_TEXT_RE.test(text)) continue
+      return text
+    }
+    return null
+  }
+
+  function findNotice(): string | null {
+    const found =
+      findFirstNotice(config.notices || [], true) ||
+      findFirstNotice(['[role="alert"]'], true) ||
+      findFirstNotice(['[aria-live="assertive"]', '[aria-live="polite"]'], true) ||
+      findFirstNotice(['[class*="toast" i]', '[data-sonner-toast]'], true) ||
+      findErrorClassNotice()
+    return found ? found.slice(0, 300) : null
+  }
+
   // --- the API exposed as window.__ndAsk ---
 
   function probe(): PageProbe {
@@ -1232,6 +1323,7 @@ export function installRuntime(config: PageConfig): void {
       generating,
       answerCount: assistantEls.length,
       lastAnswer: lastEl ? renderAnswer(lastEl) : '',
+      notice: findNotice(),
     }
   }
 

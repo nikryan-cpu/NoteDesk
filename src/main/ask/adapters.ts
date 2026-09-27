@@ -29,6 +29,8 @@ const geminiPage: PageConfig = {
   answerBody: ['.markdown', 'message-content'],
   signedOut: ['a[href*="ServiceLogin"]', 'a[href*="accounts.google.com/v3/signin"]', 'a[href*="accounts.google.com/ServiceLogin"]'],
   signedIn: ['a[aria-label*="Google Account" i]', 'img.gb_P', '[data-ogsr-up]'],
+  // Gemini's own errors ("something went wrong", a usage limit) surface as a Material snackbar.
+  notices: ['.mat-mdc-snack-bar-container', 'snack-bar-container', 'div[class*="error-snackbar" i]'],
   submitWith: 'enter',
   // Gemini has no separate web-search toggle (it searches on its own when it decides to), and
   // "Thinking" is one of the picker entries below rather than a switch of its own - so neither
@@ -72,6 +74,8 @@ const claudePage: PageConfig = {
   strip: ['[data-testid="action-bar"]', '[data-testid="message-actions"]'],
   signedOut: ['input[type="email"]', 'button[data-testid="login-with-google"]', 'button[data-testid="login-with-sso"]'],
   signedIn: ['[data-testid="user-menu-button"]'],
+  // The "you've reached your usage limit" banner sits right above the composer.
+  notices: ['[data-testid="usage-limit-banner"]', '[data-testid="chat-limit-banner"]', 'div[class*="limit-banner" i]'],
   submitWith: 'enter',
   // Extended thinking and web search both live in the same tools/settings menu next to the
   // composer, not as their own buttons.
@@ -124,6 +128,8 @@ const chatgptPage: PageConfig = {
   strip: ['[data-testid="voice-play-turn-action-button"]', '[aria-label*="Copy" i]', '[aria-label*="Regenerate" i]'],
   signedOut: ['[data-testid="login-button"]', 'button[data-testid="welcome-login-button"]'],
   signedIn: ['[data-testid="accounts-profile-button"]', '[data-testid="profile-button"]'],
+  // ChatGPT's "you've hit your limit" banner and an inline red error both land in the conversation.
+  notices: ['[data-testid="conversation-turn-error"]', 'div[class*="text-token-error" i]', 'div[class*="hit-your" i][class*="limit" i]'],
   submitWith: 'enter',
   // Both search and "think longer" live behind the "+" button next to the composer.
   thinking: {
@@ -178,6 +184,8 @@ const deepseekPage: PageConfig = {
   answerBody: ['.ds-markdown'],
   signedOut: ['input[type="password"]', 'a[href*="sign_in"]'],
   signedIn: ['div[class*="avatar" i]', '[class*="user-avatar" i]'],
+  // "The server is busy" shows as a toast - same uncertainty as the rest of this adapter.
+  notices: ['div[class*="ds-toast" i]', '.ds-flash-message'],
   submitWith: 'enter',
   // DeepThink and Search are plain toggle buttons next to the composer, but they are
   // `div[role="button"]` with no id or aria-label to key off - CSS cannot match on text, so the
@@ -219,6 +227,8 @@ const qwenPage: PageConfig = {
   answerBody: ['.markdown-content-container', '.markdown-prose'],
   signedOut: ['a[href*="/auth"]', 'button[class*="login" i]'],
   signedIn: ['[class*="avatar" i]', '[class*="user-menu" i]'],
+  // Qwen's rate-limit / server errors show as a toast near the composer.
+  notices: ['div[class*="qwen-toast" i]', '.el-message--error'],
   submitWith: 'enter',
   // Thinking and web search are toggle buttons in the composer's tool row, without a stable
   // id - a broad selector list plus itemText, same approach as DeepSeek's.
@@ -277,6 +287,7 @@ const fakePage: PageConfig = {
   answerBody: ['.body'],
   signedOut: ['#login-form'],
   signedIn: ['#account'],
+  notices: ['#notice'],
   submitWith: 'enter',
   thinking: {
     button: ['#thinking-toggle'],
