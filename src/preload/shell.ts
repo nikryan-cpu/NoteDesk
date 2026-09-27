@@ -12,9 +12,9 @@ const api: ShellApi = {
     if (!invokable.has(channel)) return Promise.reject(new Error(`unknown channel ${channel}`))
     return ipcRenderer.invoke(channel, ...args)
   },
-  on(channel: EventChannel, cb: (payload: never) => void) {
+  on(channel: EventChannel, cb: (payload: unknown) => void) {
     if (!events.has(channel)) return () => {}
-    const listener = (_e: Electron.IpcRendererEvent, payload: never) => cb(payload)
+    const listener = (_e: Electron.IpcRendererEvent, payload: unknown) => cb(payload)
     ipcRenderer.on(`nd:${channel}`, listener)
     return () => ipcRenderer.removeListener(`nd:${channel}`, listener)
   },

@@ -13,9 +13,9 @@
   },
   "private": true,
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "node scripts/run.mjs dev",
     "build": "electron-vite build",
-    "preview": "electron-vite preview",
+    "preview": "node scripts/run.mjs preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && svelte-check --tsconfig ./tsconfig.web.json --fail-on-warnings",
     "test": "vitest run",
     "test:watch": "vitest",

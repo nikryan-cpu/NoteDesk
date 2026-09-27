@@ -12,3 +12,4 @@ Thumbs.db
 .env.*
 .vscode/*
 !.vscode/extensions.json
+*.tsbuildinfo

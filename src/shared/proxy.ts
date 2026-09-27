@@ -46,7 +46,10 @@ export function buildPac(p: Pick<ProxySettings, 'scheme' | 'host' | 'port'>): st
 
 export function pacDataUrl(pac: string): string {
   // Chromium accepts data: URLs for PAC scripts.
-  const b64 = typeof Buffer !== 'undefined' ? Buffer.from(pac, 'utf8').toString('base64') : btoa(pac)
+  const bytes = new TextEncoder().encode(pac)
+  let bin = ''
+  for (const b of bytes) bin += String.fromCharCode(b)
+  const b64 = btoa(bin)
   return `data:application/x-ns-proxy-autoconfig;base64,${b64}`
 }
 

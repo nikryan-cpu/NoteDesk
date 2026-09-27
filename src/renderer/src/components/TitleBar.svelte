@@ -9,6 +9,8 @@
   import { newTab, newTabMenu } from '../lib/actions'
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <header
   class="titlebar drag"
   style:height="{titlebarHeight(ui.settings)}px"

@@ -13,8 +13,7 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "types": [],
-    "baseUrl": ".",
-    "paths": { "@shared/*": ["src/shared/*"] }
+    "paths": { "@shared/*": ["./src/shared/*"] }
   },
   "include": ["src/renderer/**/*", "src/shared/**/*", "src/preload/*.d.ts"]
 }

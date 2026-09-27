@@ -29,6 +29,7 @@ export default defineConfig({
     resolve: { alias: { '@shared': shared } },
     build: {
       target: 'chrome140',
+      minify: true,
       cssCodeSplit: true,
       rollupOptions: {
         input: {

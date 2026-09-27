@@ -40,7 +40,7 @@ export class QuickWindow {
     const win = this.win!
     const cursor = screen.getCursorScreenPoint()
     const area = screen.getDisplayNearestPoint(cursor).workArea
-    const [w = 440, h = 640] = win.getSize()
+    const [w = 440] = win.getSize()
     win.setPosition(Math.round(area.x + (area.width - w) / 2), Math.round(area.y + area.height * 0.12))
     win.show()
     win.focus()

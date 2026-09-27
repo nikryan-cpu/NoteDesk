@@ -7,7 +7,7 @@
   import BookOpen from '@lucide/svelte/icons/book-open'
   import Sparkles from '@lucide/svelte/icons/sparkles'
   import type { LayoutInsets } from '@shared/ipc'
-  import { activeTab, nd, openSettings, ui } from '../lib/state.svelte'
+  import { activeTab, nd, openSettings } from '../lib/state.svelte'
   import { t } from '../lib/i18n'
   import { newTab } from '../lib/actions'
 
