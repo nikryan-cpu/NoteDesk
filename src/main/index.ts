@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { findDeepLinkArg, parseDeepLink, PROTOCOL } from '@shared/deeplink'
 import type { ShellCommand } from '@shared/ipc'
 import type { ServiceId } from '@shared/services'
+import { AskEngine } from './ask/engine'
 import { emit } from './bus'
 import { initCompat } from './compat'
 import { loadHistory } from './history'
@@ -42,6 +43,7 @@ function bootstrap(): void {
 
   let mw: MainWindow | null = null
   let quick: QuickWindow | null = null
+  let ask: AskEngine | null = null
   let pendingLink: string | null = findDeepLinkArg(process.argv)
 
   const startHidden =
@@ -83,9 +85,17 @@ function bootstrap(): void {
     const main = mw
     quick = new QuickWindow(isDarkNow, (url) => {
       main.show()
-      main.tabs.create({ url })
+      if (url) main.tabs.create({ url })
     })
     const q = quick
+    ask = new AskEngine(
+      (url) => {
+        main.show()
+        main.tabs.create({ url })
+      },
+      () => q.uiWebContents(),
+    )
+    const engine = ask
 
     const command = (cmd: ShellCommand) => {
       if (!main.isShown()) main.show()
@@ -129,7 +139,7 @@ function bootstrap(): void {
       },
     })
 
-    registerIpc(main, q)
+    registerIpc(main, q, engine)
     initGenerationNotifications(main)
 
     createTray({
@@ -154,6 +164,7 @@ function bootstrap(): void {
     main.win.on('closed', () => {
       main.quitting = true
       q.destroy()
+      engine.dispose()
       app.quit()
     })
 

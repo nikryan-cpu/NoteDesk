@@ -1,5 +1,6 @@
 <script lang="ts">
   import Plus from '@lucide/svelte/icons/plus'
+  import ChevronDown from '@lucide/svelte/icons/chevron-down'
   import BookOpen from '@lucide/svelte/icons/book-open'
   import Sparkles from '@lucide/svelte/icons/sparkles'
   import TabStrip from './TabStrip.svelte'
@@ -31,6 +32,9 @@
         <Sparkles size={15} />
         <span>{t('service.gemini.short')}</span>
       </button>
+      <button class="icon-btn" title={t('tabs.openIn')} onclick={() => newTabMenu()}>
+        <ChevronDown size={15} />
+      </button>
     {/if}
   </div>
   <div class="list">
@@ -52,6 +56,7 @@
   }
   .actions {
     display: flex;
+    align-items: center;
     gap: 6px;
   }
   .collapsed .actions {

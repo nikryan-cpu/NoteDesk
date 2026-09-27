@@ -6,7 +6,7 @@
   import Favicon from './Favicon.svelte'
   import { nd, ui } from '../lib/state.svelte'
   import { t } from '../lib/i18n'
-  import { profileColor, profileName } from '../lib/actions'
+  import { profileColor, profileName, serviceName } from '../lib/actions'
 
   let { vertical = false, collapsed = false }: { vertical?: boolean; collapsed?: boolean } = $props()
 
@@ -96,7 +96,7 @@
       {#if color}<span class="profile" style:background={color}></span>{/if}
       <Favicon {tab} />
       {#if !collapsed}
-        <span class="title">{tab.title || t(tab.service === 'gemini' ? 'service.gemini' : 'service.notebook')}</span>
+        <span class="title">{tab.title || serviceName(tab.service)}</span>
         {#if tab.sleeping}
           <span class="badge" aria-hidden="true"><Moon size={12} /></span>
         {/if}

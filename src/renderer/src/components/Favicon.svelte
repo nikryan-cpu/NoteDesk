@@ -1,8 +1,6 @@
 <script lang="ts">
   import type { TabInfo } from '@shared/ipc'
-  import BookOpen from '@lucide/svelte/icons/book-open'
-  import Sparkles from '@lucide/svelte/icons/sparkles'
-  import Globe from '@lucide/svelte/icons/globe'
+  import ServiceIcon from './ServiceIcon.svelte'
 
   let { tab, size = 16 }: { tab: TabInfo; size?: number } = $props()
   let failed = $state(false)
@@ -17,12 +15,8 @@
     <span class="spinner" style:width="{size - 2}px" style:height="{size - 2}px"></span>
   {:else if tab.favicon && !failed}
     <img src={tab.favicon} alt="" width={size} height={size} onerror={() => (failed = true)} draggable="false" />
-  {:else if tab.service === 'gemini'}
-    <Sparkles size={size - 2} strokeWidth={2} />
-  {:else if tab.service === 'notebook'}
-    <BookOpen size={size - 2} strokeWidth={2} />
   {:else}
-    <Globe size={size - 2} strokeWidth={2} />
+    <ServiceIcon service={tab.service} {size} />
   {/if}
 </span>
 

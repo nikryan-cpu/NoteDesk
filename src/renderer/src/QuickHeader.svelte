@@ -11,7 +11,7 @@
   import logo from './assets/logo-small.svg'
   import { THEMES, themeTokens, type ThemeId, type ThemeTokens } from '@shared/themes'
 
-  let state = $state<QuickState>({ pinned: false, locale: 'en', dark: false, theme: 'minimal' })
+  let state = $state<QuickState>({ pinned: false, locale: 'en', dark: false, theme: 'minimal', accent: '' })
 
   const TOKEN_VAR: Record<keyof ThemeTokens, string> = {
     bg: '--bg',

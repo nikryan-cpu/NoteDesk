@@ -1,5 +1,5 @@
 import type { CompatPreset } from './compat'
-import type { ServiceId } from './services'
+import { EXTRA_MODEL_IDS, isModelId, type ModelId, type ServiceId } from './services'
 import { THEME_IDS, type ThemeId } from './themes'
 
 export type Locale = 'en' | 'ru'
@@ -55,7 +55,10 @@ export interface Settings {
   hardwareAcceleration: boolean
 
   hotkeys: { toggleWindow: string; quickAsk: string }
-  quickAskService: ServiceId
+  /** Chat services besides Google's that show up in menus and the Ask window. */
+  enabledModels: ModelId[]
+  /** Models preselected for a new conversation in the Ask window. */
+  askModels: ModelId[]
 
   spellcheck: boolean
   spellcheckLanguages: string[]
@@ -103,7 +106,8 @@ export function defaultSettings(): Settings {
     hardwareAcceleration: true,
 
     hotkeys: { toggleWindow: 'CommandOrControl+Shift+Space', quickAsk: 'CommandOrControl+Alt+Space' },
-    quickAskService: 'gemini',
+    enabledModels: [...EXTRA_MODEL_IDS],
+    askModels: ['gemini'],
 
     spellcheck: true,
     spellcheckLanguages: ['ru', 'en-US'],
@@ -138,6 +142,13 @@ const str = (v: unknown, fallback: string, max = 500): string => (typeof v === '
 const bool = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean' ? v : fallback)
 
 const HEX = /^#[0-9a-f]{6}$/i
+
+const unique = <T>(list: T[]): T[] => [...new Set(list)]
+
+function sanitizeAskModels(input: unknown[], fallback: ModelId[]): ModelId[] {
+  const list = unique(input.filter(isModelId)).slice(0, 4)
+  return list.length ? list : fallback
+}
 
 /**
  * Merges untrusted/partial input (a settings file from an older version, or a renderer patch)
@@ -180,7 +191,7 @@ export function sanitizeSettings(input: unknown, base: Settings = defaultSetting
     floatingContent: bool(i.floatingContent, d.floatingContent),
     reduceMotion: bool(i.reduceMotion, d.reduceMotion),
 
-    defaultService: oneOf(i.defaultService, ['notebook', 'gemini'] as const, d.defaultService),
+    defaultService: oneOf(i.defaultService, ['notebook', 'gemini', 'claude', 'chatgpt', 'deepseek', 'qwen'] as const, d.defaultService),
     restoreSession: bool(i.restoreSession, d.restoreSession),
     closeToTray: bool(i.closeToTray, d.closeToTray),
     launchAtLogin: bool(i.launchAtLogin, d.launchAtLogin),
@@ -194,7 +205,10 @@ export function sanitizeSettings(input: unknown, base: Settings = defaultSetting
       toggleWindow: str(hk.toggleWindow, d.hotkeys.toggleWindow, 60),
       quickAsk: str(hk.quickAsk, d.hotkeys.quickAsk, 60),
     },
-    quickAskService: oneOf(i.quickAskService, ['notebook', 'gemini'] as const, d.quickAskService),
+    enabledModels: Array.isArray(i.enabledModels)
+      ? unique(i.enabledModels.filter((m): m is ModelId => isModelId(m) && m !== 'gemini'))
+      : d.enabledModels,
+    askModels: Array.isArray(i.askModels) ? sanitizeAskModels(i.askModels, d.askModels) : d.askModels,
 
     spellcheck: bool(i.spellcheck, d.spellcheck),
     spellcheckLanguages: Array.isArray(i.spellcheckLanguages)

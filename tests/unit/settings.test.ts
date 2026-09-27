@@ -110,6 +110,41 @@ describe('sanitizeSettings', () => {
   })
 })
 
+describe('enabledModels sanitize', () => {
+  it('drops invalid ids and never allows gemini', () => {
+    const result = sanitizeSettings({ enabledModels: ['claude', 'gemini', 'bogus', 'chatgpt'] })
+    expect(result.enabledModels).toEqual(['claude', 'chatgpt'])
+  })
+
+  it('dedupes', () => {
+    const result = sanitizeSettings({ enabledModels: ['claude', 'claude', 'qwen'] })
+    expect(result.enabledModels).toEqual(['claude', 'qwen'])
+  })
+
+  it('falls back to the base value for non-array input', () => {
+    const base: Settings = { ...defaultSettings(), enabledModels: ['deepseek'] }
+    expect(sanitizeSettings({ enabledModels: 'nope' }, base).enabledModels).toEqual(['deepseek'])
+  })
+})
+
+describe('askModels sanitize', () => {
+  it('drops invalid ids and caps the list at 4', () => {
+    const result = sanitizeSettings({ askModels: ['gemini', 'claude', 'chatgpt', 'deepseek', 'qwen', 'bogus'] })
+    expect(result.askModels).toEqual(['gemini', 'claude', 'chatgpt', 'deepseek'])
+  })
+
+  it('dedupes', () => {
+    const result = sanitizeSettings({ askModels: ['gemini', 'gemini', 'claude'] })
+    expect(result.askModels).toEqual(['gemini', 'claude'])
+  })
+
+  it('never ends up empty, falling back to the base value', () => {
+    const base: Settings = { ...defaultSettings(), askModels: ['claude'] }
+    expect(sanitizeSettings({ askModels: [] }, base).askModels).toEqual(['claude'])
+    expect(sanitizeSettings({ askModels: ['bogus', 42, null] }, base).askModels).toEqual(['claude'])
+  })
+})
+
 describe('toPublic', () => {
   it('never exposes passwordEnc and reports hasPassword correctly', () => {
     const withPassword: Settings = { ...defaultSettings(), proxy: { ...defaultSettings().proxy, passwordEnc: 'xyz' } }

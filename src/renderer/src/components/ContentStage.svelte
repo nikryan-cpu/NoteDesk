@@ -7,12 +7,14 @@
   import BookOpen from '@lucide/svelte/icons/book-open'
   import Sparkles from '@lucide/svelte/icons/sparkles'
   import type { LayoutInsets } from '@shared/ipc'
+  import ServiceIcon from './ServiceIcon.svelte'
   import { activeTab, nd, openSettings } from '../lib/state.svelte'
   import { t } from '../lib/i18n'
-  import { newTab } from '../lib/actions'
+  import { availableServices, newTab, serviceName } from '../lib/actions'
 
   let { insets }: { insets: LayoutInsets } = $props()
   const tab = $derived(activeTab())
+  const extras = $derived(availableServices().filter((id) => id !== 'notebook' && id !== 'gemini'))
 </script>
 
 <div
@@ -31,6 +33,17 @@
         <button class="btn primary" onclick={() => newTab('notebook')}><BookOpen size={15} /> {t('service.notebook')}</button>
         <button class="btn" onclick={() => newTab('gemini')}><Sparkles size={15} /> {t('service.gemini')}</button>
       </div>
+      {#if extras.length}
+        <div class="also">
+          <span class="faint">{t('tabs.also')}</span>
+          {#each extras as id (id)}
+            <button class="also-btn" onclick={() => newTab(id)}>
+              <ServiceIcon service={id} size={14} />
+              {serviceName(id)}
+            </button>
+          {/each}
+        </div>
+      {/if}
     </div>
   {:else if tab.crashed}
     <div class="state">
@@ -103,6 +116,31 @@
     display: flex;
     gap: 8px;
     margin-top: 6px;
+  }
+  .also {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 12px;
+  }
+  .also-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 26px;
+    padding: 0 9px;
+    border-radius: 999px;
+    color: var(--text-2);
+    transition:
+      background var(--dur) var(--ease),
+      color var(--dur) var(--ease);
+  }
+  .also-btn:hover {
+    background: var(--tab-hover);
+    color: var(--text);
   }
   .glyph {
     display: grid;

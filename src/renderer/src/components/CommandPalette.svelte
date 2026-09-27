@@ -4,7 +4,7 @@
   import { onMount } from 'svelte'
   import type { HistoryEntry, PromptSnippet, TabInfo } from '@shared/ipc'
   import { fuzzyMatch } from '@shared/text'
-  import { historyKey } from '@shared/services'
+  import { historyKey, serviceForUrl, type ServiceId } from '@shared/services'
   import { THEME_IDS, THEMES } from '@shared/themes'
   import Search from '@lucide/svelte/icons/search'
   import BookOpen from '@lucide/svelte/icons/book-open'
@@ -28,14 +28,16 @@
   import Settings2 from '@lucide/svelte/icons/settings-2'
   import MessageSquareText from '@lucide/svelte/icons/message-square-text'
   import MessageSquarePlus from '@lucide/svelte/icons/message-square-plus'
+  import MessagesSquare from '@lucide/svelte/icons/messages-square'
   import RefreshCw from '@lucide/svelte/icons/refresh-cw'
   import Zap from '@lucide/svelte/icons/zap'
   import Trash2 from '@lucide/svelte/icons/trash-2'
   import Palette from '@lucide/svelte/icons/palette'
   import Check from '@lucide/svelte/icons/check'
   import Favicon from './Favicon.svelte'
+  import ServiceIcon from './ServiceIcon.svelte'
   import { activeTab, closeOverlay, isDark, nd, openOverlay, openSettings, setSettings, ui } from '../lib/state.svelte'
-  import { newTab, profileName } from '../lib/actions'
+  import { availableServices, newTab, profileName, serviceName } from '../lib/actions'
   import { t } from '../lib/i18n'
   import { keyLabel } from '../lib/shortcuts'
 
@@ -48,6 +50,7 @@
     secondary?: string
     icon?: typeof Search
     tab?: TabInfo
+    service?: ServiceId
     dot?: string
     sleeping?: boolean
     checked?: boolean
@@ -95,7 +98,7 @@
     ui.tabs.map((tb) => ({
       id: `tab-${tb.id}`,
       section: 'tabs',
-      label: tb.title || t(tb.service === 'gemini' ? 'service.gemini' : 'service.notebook'),
+      label: tb.title || serviceName(tb.service),
       secondary: multiProfile ? profileName(tb.profileId) : undefined,
       tab: tb,
       sleeping: tb.sleeping,
@@ -111,19 +114,20 @@
 
   const recentItems: PaletteItem[] = $derived(
     history.filter((h) => !openKeys.has(`${h.profileId} ${h.key}`)).map((h) => {
-      const kind = t(h.kind === 'notebook' ? 'palette.recentNotebook' : 'palette.recentChat')
+      const svc = h.kind === 'model-chat' ? serviceForUrl(h.url) : null
+      const kind = svc ? serviceName(svc) : t(h.kind === 'notebook' ? 'palette.recentNotebook' : 'palette.recentChat')
       const parts = multiProfile ? [kind, profileName(h.profileId)] : [kind]
-      return {
+      const base = {
         id: `recent-${h.key}`,
-        section: 'recent',
+        section: 'recent' as const,
         label: h.title || h.url,
         secondary: parts.join(' · '),
-        icon: h.kind === 'notebook' ? BookOpen : Sparkles,
         run: () => {
           closeOverlay()
           openRecent(h)
         },
       }
+      return svc ? { ...base, service: svc } : { ...base, icon: h.kind === 'notebook' ? BookOpen : Sparkles }
     }),
   )
 
@@ -152,6 +156,19 @@
         newTab('gemini')
       },
     })
+    for (const id of availableServices()) {
+      if (id === 'notebook' || id === 'gemini') continue
+      list.push({
+        id: `cmd-new-${id}`,
+        section: 'commands',
+        label: t('tabs.newService', { name: serviceName(id) }),
+        service: id,
+        run: () => {
+          closeOverlay()
+          newTab(id)
+        },
+      })
+    }
     if (multiProfile) {
       for (const p of ui.settings.profiles) {
         list.push({
@@ -359,6 +376,13 @@
       label: t('action.managePrompts'),
       icon: MessageSquareText,
       run: () => openSettings('prompts'),
+    })
+    list.push({
+      id: 'cmd-models-settings',
+      section: 'commands',
+      label: t('action.chatServicesSettings'),
+      icon: MessagesSquare,
+      run: () => openSettings('models'),
     })
     list.push({
       id: 'cmd-insert-prompt',
@@ -596,6 +620,8 @@
               <Favicon tab={item.tab} size={16} />
             {:else if item.dot}
               <span class="dot" style:background={item.dot}></span>
+            {:else if item.service}
+              <ServiceIcon service={item.service} size={16} />
             {:else if item.icon}
               <item.icon size={16} />
             {/if}

@@ -5,11 +5,9 @@
   import Toggle from './Toggle.svelte'
   import { setSettings, ui } from '../../lib/state.svelte'
   import { t } from '../../lib/i18n'
+  import { availableServices, serviceName } from '../../lib/actions'
 
-  const serviceOptions = [
-    { value: 'notebook', label: t('service.notebook') },
-    { value: 'gemini', label: t('service.gemini') },
-  ] as const
+  const serviceOptions = $derived(availableServices().map((id) => ({ value: id, label: serviceName(id) })))
 </script>
 
 <Group>
@@ -31,9 +29,6 @@
       disabled={!ui.settings.launchAtLogin}
       onchange={(v) => setSettings({ startMinimized: v })}
     />
-  </Row>
-  <Row label={t('general.quickAskService')}>
-    <Select value={ui.settings.quickAskService} options={serviceOptions} onchange={(v) => setSettings({ quickAskService: v })} />
   </Row>
 </Group>
 

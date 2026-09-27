@@ -3,6 +3,7 @@
   import Palette from '@lucide/svelte/icons/palette'
   import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal'
   import Users from '@lucide/svelte/icons/users'
+  import MessagesSquare from '@lucide/svelte/icons/messages-square'
   import Gauge from '@lucide/svelte/icons/gauge'
   import Keyboard from '@lucide/svelte/icons/keyboard'
   import MessageSquare from '@lucide/svelte/icons/message-square'
@@ -13,6 +14,7 @@
   import AppearanceSection from './settings/AppearanceSection.svelte'
   import GeneralSection from './settings/GeneralSection.svelte'
   import ProfilesSection from './settings/ProfilesSection.svelte'
+  import ModelsSection from './settings/ModelsSection.svelte'
   import PerformanceSection from './settings/PerformanceSection.svelte'
   import ShortcutsSection from './settings/ShortcutsSection.svelte'
   import PromptsSection from './settings/PromptsSection.svelte'
@@ -28,6 +30,7 @@
     { id: 'appearance', icon: Palette, label: 'settings.appearance' },
     { id: 'general', icon: SlidersHorizontal, label: 'settings.general' },
     { id: 'profiles', icon: Users, label: 'settings.profiles' },
+    { id: 'models', icon: MessagesSquare, label: 'settings.models' },
     { id: 'performance', icon: Gauge, label: 'settings.performance' },
     { id: 'shortcuts', icon: Keyboard, label: 'settings.shortcuts' },
     { id: 'prompts', icon: MessageSquare, label: 'settings.prompts' },
@@ -65,6 +68,8 @@
         <GeneralSection />
       {:else if ui.settingsSection === 'profiles'}
         <ProfilesSection />
+      {:else if ui.settingsSection === 'models'}
+        <ModelsSection />
       {:else if ui.settingsSection === 'performance'}
         <PerformanceSection />
       {:else if ui.settingsSection === 'shortcuts'}

@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import type { InitState, InvokeChannel, InvokeMap } from '@shared/ipc'
 import { PROFILE_COLORS, type Profile } from '@shared/settings'
 import { isSafeExternal } from '@shared/services'
+import type { AskEngine } from './ask/engine'
+import { registerAskIpc } from './ask/ipc'
 import { clearFinishedDownloads, downloadAction, listDownloads } from './downloads'
 import { clearHistory, clearHistoryForProfile, listHistory, removeHistory } from './history'
 import { currentLocale, t } from './i18n'
@@ -21,8 +23,8 @@ import { systemSupportsMaterial, type MainWindow } from './window'
 
 type Handler<K extends InvokeChannel> = (...args: Parameters<InvokeMap[K]>) => ReturnType<InvokeMap[K]> | Promise<ReturnType<InvokeMap[K]>>
 
-export function registerIpc(mw: MainWindow, quick: QuickWindow): void {
-  const trusted = (e: IpcMainInvokeEvent) => e.sender === mw.shell.webContents || e.sender === quick.headerWebContents()
+export function registerIpc(mw: MainWindow, quick: QuickWindow, ask: AskEngine): void {
+  const trusted = (e: IpcMainInvokeEvent) => e.sender === mw.shell.webContents || e.sender === quick.uiWebContents()
 
   function handle<K extends InvokeChannel>(channel: K, fn: Handler<K>): void {
     ipcMain.handle(channel, (event, ...args) => {
@@ -239,6 +241,7 @@ export function registerIpc(mw: MainWindow, quick: QuickWindow): void {
     }),
   )
 
+  registerAskIpc(ask, handle)
 }
 
 async function clearProfileData(profileId: string): Promise<void> {

@@ -1,6 +1,15 @@
 // Typed IPC contract between the shell UI (renderer) and the main process.
+import type {
+  AskAnswerUpdate,
+  AskConversation,
+  AskConversationSummary,
+  AskInit,
+  AskSendRequest,
+  AskSendResult,
+  ModelStatus,
+} from './ask'
 import type { Locale, Profile, PublicSettings, Settings } from './settings'
-import type { HistoryKind, ServiceId } from './services'
+import type { HistoryKind, ModelId, ServiceId } from './services'
 
 export type OsPlatform = 'win32' | 'darwin' | 'linux'
 
@@ -126,6 +135,8 @@ export interface QuickState {
   locale: Locale
   dark: boolean
   theme: string
+  /** Custom accent colour from settings, or '' for the theme's own. */
+  accent: string
 }
 
 export interface ProxyTestResult {
@@ -188,6 +199,27 @@ export interface InvokeMap {
   'app:clearAllData': () => void
   'quick:action': (action: 'init' | 'close' | 'pin' | 'openInMain' | 'show') => QuickState
   'menu:popup': (items: MenuItemSpec[]) => string | null
+
+  // Ask window (multi-model chat)
+  'ask:init': () => AskInit
+  'ask:list': () => AskConversationSummary[]
+  'ask:get': (conversationId: string) => AskConversation | null
+  'ask:send': (req: AskSendRequest) => AskSendResult
+  'ask:stop': (conversationId: string) => void
+  'ask:retry': (conversationId: string, turnId: string, model: ModelId) => void
+  'ask:setModels': (conversationId: string, models: ModelId[]) => void
+  'ask:rename': (conversationId: string, title: string) => void
+  'ask:pin': (conversationId: string, pinned: boolean) => void
+  'ask:delete': (conversationId: string) => void
+  /** Opens this conversation's chat on the service in a main-window tab. */
+  'ask:openThread': (conversationId: string, model: ModelId) => void
+  'ask:models': () => ModelStatus[]
+  /** Loads the given (default: all enabled) services in the background and checks sign-in. */
+  'ask:checkModels': (models?: ModelId[]) => ModelStatus[]
+  /** Opens a visible window with the service's sign-in page. */
+  'ask:login': (model: ModelId) => void
+  /** Opens a visible window with the page the engine is on (to pass a captcha etc.). */
+  'ask:showPage': (model: ModelId) => void
 }
 
 export interface EventMap {
@@ -200,6 +232,9 @@ export interface EventMap {
   update: UpdateStatus
   'system-theme': { dark: boolean }
   'quick-theme': QuickState
+  'ask-answer': AskAnswerUpdate
+  'ask-conversations': AskConversationSummary[]
+  'ask-models': ModelStatus[]
 }
 
 export type InvokeChannel = keyof InvokeMap
@@ -253,6 +288,21 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'app:clearAllData',
   'quick:action',
   'menu:popup',
+  'ask:init',
+  'ask:list',
+  'ask:get',
+  'ask:send',
+  'ask:stop',
+  'ask:retry',
+  'ask:setModels',
+  'ask:rename',
+  'ask:pin',
+  'ask:delete',
+  'ask:openThread',
+  'ask:models',
+  'ask:checkModels',
+  'ask:login',
+  'ask:showPage',
 ]
 
 export const EVENT_CHANNELS: readonly EventChannel[] = [
@@ -265,6 +315,9 @@ export const EVENT_CHANNELS: readonly EventChannel[] = [
   'update',
   'system-theme',
   'quick-theme',
+  'ask-answer',
+  'ask-conversations',
+  'ask-models',
 ]
 
 /** API exposed on `window.nd` by the shell preload. */
