@@ -1,6 +1,6 @@
 export const en = {
   'app.name': 'NoteDesk',
-  'app.tagline': 'A fast, beautiful desktop home for Gemini Notebook and Gemini.',
+  'app.tagline': 'Gemini Notebook and Gemini in a desktop app of their own.',
   'app.disclaimer': 'Unofficial app. Not affiliated with, endorsed or sponsored by Google. Gemini, Gemini Notebook and NotebookLM are trademarks of Google LLC.',
 
   'service.notebook': 'Gemini Notebook',

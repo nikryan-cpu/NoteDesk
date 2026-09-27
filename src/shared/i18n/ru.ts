@@ -2,7 +2,7 @@ import type { I18nKey } from './en'
 
 export const ru: Record<I18nKey, string> = {
   'app.name': 'NoteDesk',
-  'app.tagline': 'Быстрый и красивый дом для Gemini Notebook и Gemini на рабочем столе.',
+  'app.tagline': 'Gemini Notebook и Gemini в отдельном приложении для рабочего стола.',
   'app.disclaimer': 'Неофициальное приложение. Не связано с Google, не одобрено и не спонсируется Google. Gemini, Gemini Notebook и NotebookLM являются товарными знаками Google LLC.',
 
   'service.notebook': 'Gemini Notebook',
