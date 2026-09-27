@@ -26,6 +26,7 @@ export const IN_APP_SHORTCUTS: ShortcutRow[] = [
   { label: 'shortcuts.sidebar', combos: [['Mod', 'B']] },
   { label: 'shortcuts.settings', combos: [['Mod', ',']] },
   { label: 'shortcuts.downloads', combos: [['Mod', 'J']] },
+  { label: 'shortcuts.memory', combos: [['Mod', 'Shift', 'M']] },
   { label: 'shortcuts.help', combos: [['Mod', '/'], ['F1']] },
 ]
 

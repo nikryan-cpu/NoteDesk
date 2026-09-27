@@ -256,6 +256,7 @@ export const en = {
   'shortcuts.sidebar': 'Toggle sidebar',
   'shortcuts.settings': 'Settings',
   'shortcuts.downloads': 'Downloads',
+  'shortcuts.memory': 'Memory monitor',
   'shortcuts.help': 'This cheat sheet',
 
   'prompts.hint': 'Reusable prompts you can drop into any chat box with Ctrl+P or from the command palette.',

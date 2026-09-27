@@ -258,6 +258,7 @@ export const ru: Record<I18nKey, string> = {
   'shortcuts.sidebar': 'Боковая панель',
   'shortcuts.settings': 'Настройки',
   'shortcuts.downloads': 'Загрузки',
+  'shortcuts.memory': 'Монитор памяти',
   'shortcuts.help': 'Эта шпаргалка',
 
   'prompts.hint': 'Готовые промпты, которые можно вставить в любое поле чата через Ctrl+P или палитру команд.',

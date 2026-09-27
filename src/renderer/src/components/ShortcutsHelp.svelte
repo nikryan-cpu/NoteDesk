@@ -66,7 +66,7 @@
   .panel {
     display: flex;
     flex-direction: column;
-    width: 620px;
+    width: 760px;
     max-width: calc(100vw - 48px);
     max-height: calc(100vh - 48px);
     animation: nd-pop-in 200ms var(--ease);
@@ -101,8 +101,8 @@
     gap: 22px;
   }
   .grid {
-    columns: 2 260px;
-    column-gap: 28px;
+    columns: 2 320px;
+    column-gap: 32px;
   }
   .list {
     display: flex;
@@ -118,16 +118,17 @@
   }
   .label {
     min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    line-height: 1.3;
     color: var(--text-2);
   }
   .keys {
     display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     align-items: center;
     gap: 4px;
     flex: none;
+    max-width: 62%;
   }
   .footer {
     flex: none;

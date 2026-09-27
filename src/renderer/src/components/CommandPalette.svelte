@@ -106,8 +106,11 @@
     })),
   )
 
+  // A recent notebook that is already open in a tab shows up under Tabs only.
+  const openKeys = $derived(new Set(ui.tabs.map((tb) => `${tb.profileId} ${historyKey(tb.url)}`)))
+
   const recentItems: PaletteItem[] = $derived(
-    history.map((h) => {
+    history.filter((h) => !openKeys.has(`${h.profileId} ${h.key}`)).map((h) => {
       const kind = t(h.kind === 'notebook' ? 'palette.recentNotebook' : 'palette.recentChat')
       const parts = multiProfile ? [kind, profileName(h.profileId)] : [kind]
       return {
