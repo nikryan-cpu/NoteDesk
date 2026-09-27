@@ -4,14 +4,43 @@ on:
   push:
     tags:
       - 'v*'
-  # Manual runs build the installers as workflow artifacts without touching Releases.
   workflow_dispatch:
+    inputs:
+      release:
+        description: Upload the installers to a draft release for the version in package.json
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
-  release:
+  # Creates the draft once, so the three build jobs don't race to create one each.
+  draft:
+    if: github.event_name == 'push' || inputs.release
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the draft release
+        run: |
+          tag="v$(node -p "require('./package.json').version")"
+          if [ "${GITHUB_REF_TYPE}" = tag ] && [ "${GITHUB_REF_NAME}" != "$tag" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${tag#v}" >&2
+            exit 1
+          fi
+          if gh release list --limit 100 --json tagName --jq '.[].tagName' | grep -qx "$tag"; then
+            echo "Release $tag already exists"
+          else
+            gh release create "$tag" --draft --title "NoteDesk ${tag#v}" --target "$GITHUB_SHA" --notes ""
+          fi
+
+  build:
+    needs: draft
+    # Manual runs without a release still build, they just skip the draft job.
+    if: always() && (needs.draft.result == 'success' || needs.draft.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
@@ -29,6 +58,7 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       # electron-builder downloads the Electron builds it packages on its own.
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      PUBLISH: ${{ (github.event_name == 'push' || inputs.release) && 'always' || 'never' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,12 +70,10 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      # On a tag, electron-builder's publish config (releaseType: draft) creates/updates a
-      # draft release for it, which I review and publish by hand.
-      - run: npx electron-builder ${{ matrix.flag }} --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+      # With PUBLISH=always the installers go into the draft release (releaseType: draft),
+      # which I review and then publish with the "Publish release" workflow.
+      - run: npx electron-builder ${{ matrix.flag }} --publish ${{ env.PUBLISH }}
 
-      # Fallback so the built installers are still reachable from the Actions run even if
-      # the draft release needs a closer look before it goes out.
       - uses: actions/upload-artifact@v4
         with:
           name: notedesk-${{ matrix.os }}
