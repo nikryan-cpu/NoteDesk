@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+  # Manual runs build the installers as workflow artifacts without touching Releases.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -38,14 +40,18 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      # electron-builder's publish config (releaseType: draft) creates/updates a draft
-      # release for the tag; the owner reviews it and publishes it by hand.
-      - run: npx electron-builder ${{ matrix.flag }} --publish always
+      # On a tag, electron-builder's publish config (releaseType: draft) creates/updates a
+      # draft release for it, which I review and publish by hand.
+      - run: npx electron-builder ${{ matrix.flag }} --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
 
       # Fallback so the built installers are still reachable from the Actions run even if
       # the draft release needs a closer look before it goes out.
       - uses: actions/upload-artifact@v4
         with:
           name: notedesk-${{ matrix.os }}
-          path: release/
-          retention-days: 5
+          path: |
+            release/*/*.exe
+            release/*/*.dmg
+            release/*/*.AppImage
+            release/*/*.deb
+          retention-days: 7

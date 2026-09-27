@@ -1,5 +1,5 @@
 // Auto-update from GitHub Releases (electron-updater). Unsigned macOS builds can't self-update,
-// and neither can .deb installs, so those only get a "new version available" link.
+// and neither can .deb installs or the portable .exe, so those only get a "new version" link.
 import { app } from 'electron'
 import electronUpdater from 'electron-updater'
 import type { UpdateStatus } from '@shared/ipc'
@@ -22,6 +22,8 @@ export function updateStatus(): UpdateStatus {
 }
 
 function canSelfInstall(): boolean {
+  // The portable .exe runs from a temp copy; it can only point at the new release.
+  if (process.env['PORTABLE_EXECUTABLE_FILE']) return false
   if (process.platform === 'darwin') return false
   if (process.platform === 'linux') return Boolean(process.env['APPIMAGE'])
   return true
