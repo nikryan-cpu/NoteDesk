@@ -154,6 +154,7 @@ export const en = {
 
   'memory.title': 'Memory',
   'memory.total': 'NoteDesk uses',
+  'memory.tabs': 'Tabs',
   'memory.shell': 'App interface',
   'memory.browser': 'Browser core',
   'memory.gpu': 'Graphics',

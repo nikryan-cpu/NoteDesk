@@ -156,6 +156,7 @@ export const ru: Record<I18nKey, string> = {
 
   'memory.title': 'Память',
   'memory.total': 'NoteDesk использует',
+  'memory.tabs': 'Вкладки',
   'memory.shell': 'Интерфейс приложения',
   'memory.browser': 'Ядро браузера',
   'memory.gpu': 'Графика',
