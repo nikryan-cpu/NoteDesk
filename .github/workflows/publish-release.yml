@@ -21,6 +21,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check the draft has every file
+        run: |
+          v="${TAG#v}"
+          gh release view "$TAG" --json assets --jq '.assets[].name' | sort | tee assets.txt
+          for f in "NoteDesk-$v-Setup.exe" "NoteDesk-$v-Portable.exe" "NoteDesk-$v-universal.dmg" \
+                   "NoteDesk-$v-x86_64.AppImage" "notedesk_${v}_amd64.deb" latest.yml latest-linux.yml; do
+            grep -qx "$f" assets.txt || { echo "missing $f" >&2; exit 1; }
+          done
+
       - name: Extract release notes
         run: |
           version="${TAG#v}"
