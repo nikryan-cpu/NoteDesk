@@ -21,6 +21,7 @@ export interface ShortcutActions {
 }
 
 let actions: ShortcutActions | null = null
+let recording = false
 
 export function setShortcutActions(a: ShortcutActions): void {
   actions = a
@@ -29,7 +30,7 @@ export function setShortcutActions(a: ShortcutActions): void {
 const isMac = process.platform === 'darwin'
 
 export function handleShortcut(input: Input, _source: 'shell' | 'content'): boolean {
-  if (!actions || input.type !== 'keyDown') return false
+  if (!actions || recording || input.type !== 'keyDown') return false
   const a = actions
   const mod = isMac ? input.meta : input.control
   const { shift, alt, code } = input
@@ -153,28 +154,51 @@ export function handleShortcut(input: Input, _source: 'shell' | 'content'): bool
 
 // ------------------------------------------------------------------ global hotkeys
 
-const registered = new Map<string, string>()
+const registered = new Map<string, { accelerator: string; fn: () => void }>()
 
 /** Registers or replaces a global hotkey. Returns false if the OS refused it. */
 export function setGlobalHotkey(name: string, accelerator: string, fn: () => void): boolean {
   const prev = registered.get(name)
   if (prev) {
-    globalShortcut.unregister(prev)
+    if (!recording) globalShortcut.unregister(prev.accelerator)
     registered.delete(name)
   }
   if (!accelerator) return true
+  if (recording) {
+    registered.set(name, { accelerator, fn })
+    return true
+  }
   try {
     const ok = globalShortcut.register(accelerator, fn)
-    if (ok) registered.set(name, accelerator)
+    if (ok) registered.set(name, { accelerator, fn })
     return ok
   } catch {
     return false
   }
 }
 
+/**
+ * While a new hotkey is being recorded, every shortcut is released so the key combination
+ * reaches the settings page instead of triggering an action.
+ */
+export function setHotkeyRecording(on: boolean): void {
+  if (on === recording) return
+  recording = on
+  for (const { accelerator, fn } of registered.values()) {
+    if (on) globalShortcut.unregister(accelerator)
+    else {
+      try {
+        globalShortcut.register(accelerator, fn)
+      } catch {
+        /* taken meanwhile */
+      }
+    }
+  }
+}
+
 export function isHotkeyAvailable(accelerator: string): boolean {
   if (!accelerator) return true
-  if ([...registered.values()].includes(accelerator)) return true
+  if ([...registered.values()].some((r) => r.accelerator === accelerator)) return true
   try {
     if (globalShortcut.isRegistered(accelerator)) return false
     const ok = globalShortcut.register(accelerator, () => {})

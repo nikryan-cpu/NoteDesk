@@ -153,6 +153,8 @@ export interface InvokeMap {
   'tabs:menu': (id: string) => void
   'tabs:zoom': (id: string, dir: 1 | -1 | 0) => void
   'tabs:mute': (id: string) => void
+  'tabs:copyLink': (id: string) => void
+  'tabs:openInBrowser': (id: string) => void
   'find:start': (text: string, forward: boolean, findNext: boolean) => void
   'find:stop': () => void
   'settings:set': (patch: SettingsPatch) => PublicSettings
@@ -175,6 +177,8 @@ export interface InvokeMap {
   'memory:get': () => MemoryReport
   'proxy:test': () => ProxyTestResult
   'hotkey:check': (accelerator: string) => boolean
+  /** Suspends in-app and global shortcuts while the settings page records a new hotkey. */
+  'hotkey:recording': (on: boolean) => void
   'app:openExternal': (url: string) => void
   'app:pickFolder': () => string | null
   'app:checkUpdates': () => void
@@ -215,6 +219,8 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'tabs:menu',
   'tabs:zoom',
   'tabs:mute',
+  'tabs:copyLink',
+  'tabs:openInBrowser',
   'find:start',
   'find:stop',
   'settings:set',
@@ -237,6 +243,7 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'memory:get',
   'proxy:test',
   'hotkey:check',
+  'hotkey:recording',
   'app:openExternal',
   'app:pickFolder',
   'app:checkUpdates',

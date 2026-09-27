@@ -15,7 +15,7 @@ import { deletePrompt, listPrompts, savePrompt } from './prompts'
 import type { QuickWindow } from './quick'
 import { forgetSession, sessionFor } from './sessions'
 import { getSettings, publicSettings, updateSettings } from './settings'
-import { isHotkeyAvailable } from './shortcuts'
+import { isHotkeyAvailable, setHotkeyRecording } from './shortcuts'
 import { checkForUpdates, downloadOrInstall, updateStatus } from './updater'
 import { systemSupportsMaterial, type MainWindow } from './window'
 
@@ -61,6 +61,8 @@ export function registerIpc(mw: MainWindow, quick: QuickWindow): void {
   handle('tabs:move', (id, toIndex) => tabs.move(str(id), Number(toIndex) || 0))
   handle('tabs:zoom', (id, dir) => tabs.zoom(str(id), dir === 1 || dir === -1 ? dir : 0))
   handle('tabs:mute', (id) => tabs.toggleMute(str(id)))
+  handle('tabs:copyLink', (id) => tabs.copyLink(str(id)))
+  handle('tabs:openInBrowser', (id) => tabs.openInBrowser(str(id)))
   handle('tabs:menu', (id) => {
     const tab = tabs.get(str(id))
     if (!tab) return
@@ -181,6 +183,7 @@ export function registerIpc(mw: MainWindow, quick: QuickWindow): void {
   handle('memory:get', () => memoryReport(tabs, mw.shell.webContents.getOSProcessId()))
   handle('proxy:test', () => testProxy(sessionFor(getSettings().defaultProfileId)))
   handle('hotkey:check', (accel) => isHotkeyAvailable(str(accel, 60)))
+  handle('hotkey:recording', (on) => setHotkeyRecording(Boolean(on)))
 
   // ------------------------------------------------------------ app
   handle('app:openExternal', (url) => {
