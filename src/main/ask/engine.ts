@@ -2,15 +2,19 @@
 // account in the default profile's session. A prompt is typed and submitted the same way a
 // person would, and the answer is read back out of the page as Markdown. Conversations and
 // their per-model thread URLs live in store.ts; this file only drives the pages and the queues.
-import { BrowserWindow, type WebContents } from 'electron'
+import { app, shell, BrowserWindow, type WebContents } from 'electron'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   MAX_COMPARE_MODELS,
+  sanitizeModelOptions,
   type AskAnswer,
   type AskConversation,
   type AskConversationSummary,
   type AskInit,
   type AskSendRequest,
   type AskSendResult,
+  type ModelOptions,
   type ModelState,
   type ModelStatus,
   promptWithContext,
@@ -24,9 +28,20 @@ import { sessionFor } from '../sessions'
 import { getSettings, onSettingsChange } from '../settings'
 import { adapterFor } from './adapters'
 import * as pages from './pages'
-import { runtimeScript, COMPOSER_TEXT_SCRIPT, FOCUS_SCRIPT, HAS_RUNTIME_SCRIPT, PROBE_SCRIPT, SEND_SCRIPT, STOP_SCRIPT } from './runtime'
+import {
+  runtimeScript,
+  toggleScript,
+  variantScript,
+  COMPOSER_TEXT_SCRIPT,
+  FOCUS_SCRIPT,
+  HAS_RUNTIME_SCRIPT,
+  OUTLINE_SCRIPT,
+  PROBE_SCRIPT,
+  SEND_SCRIPT,
+  STOP_SCRIPT,
+} from './runtime'
 import * as store from './store'
-import { ASK_WORLD_ID, type ModelAdapter, type PageProbe } from './types'
+import { ASK_WORLD_ID, capabilitiesOf, type ModelAdapter, type PageProbe } from './types'
 
 const SWEEP_MS = 60_000
 const LOAD_TIMEOUT_MS = 30_000
@@ -56,12 +71,54 @@ export function isAllowedNav(url: string): boolean {
   return Boolean(process.env['NOTEDESK_E2E']) && url.startsWith('file:')
 }
 
+function optionsEqual(a: ModelOptions | null, b: ModelOptions): boolean {
+  return !!a && a.variant === b.variant && a.thinking === b.thinking && a.search === b.search
+}
+
+/** Clicks the first visible match, for the diagnostics dump only - not part of a normal job. */
+function clickFirstVisibleScript(selectors: string[]): string {
+  return `(() => {
+    var sels = ${JSON.stringify(selectors)}
+    for (var i = 0; i < sels.length; i++) {
+      var els
+      try { els = document.querySelectorAll(sels[i]) } catch (e) { continue }
+      for (var j = 0; j < els.length; j++) {
+        var el = els[j]
+        var rect = el.getBoundingClientRect()
+        var style = window.getComputedStyle(el)
+        if (style.display === 'none' || style.visibility === 'hidden') continue
+        if (rect.width === 0 && rect.height === 0) continue
+        el.click()
+        return true
+      }
+    }
+    return false
+  })()`
+}
+
+function diagnosticsStamp(d: Date): string {
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`
+}
+
+function originAndPath(url: string): string {
+  try {
+    const u = new URL(url)
+    return `${u.origin}${u.pathname}`
+  } catch {
+    return url
+  }
+}
+
 interface ModelPage {
   win: BrowserWindow
   webContents: WebContents
   lastActivity: number
   queue: Promise<void>
   currentJob: JobHandle | null
+  /** Options last switched on this page, and the thread it was on - to skip needless re-clicks. */
+  appliedOptions: ModelOptions | null
+  appliedThreadUrl: string | null
 }
 
 interface JobHandle {
@@ -91,11 +148,14 @@ export class AskEngine {
   // ---------------------------------------------------------------- public API (used by ipc.ts)
 
   init(): AskInit {
+    const capabilities = Object.fromEntries(MODEL_IDS.map((id) => [id, capabilitiesOf(adapterFor(id))])) as AskInit['capabilities']
     return {
       conversations: store.list(),
       statuses: [...this.statuses.values()],
       enabledModels: this.enabledModels(),
       defaultModels: this.defaultModels(),
+      capabilities,
+      defaultOptions: store.getDefaults(),
     }
   }
 
@@ -116,9 +176,21 @@ export class AskEngine {
       if (!existing) throw new Error('conversation not found')
       conv = existing
       store.setModels(conv.id, models)
+      // Existing conversation: a model missing from req.options just keeps what it had.
+      for (const model of models) {
+        const provided = req.options?.[model]
+        if (provided) store.setOptions(conv.id, model, this.sanitizeOptions(model, provided))
+      }
     } else {
       conv = store.create(models, req.prompt)
+      const defaults = store.getDefaults()
+      for (const model of models) {
+        store.setOptions(conv.id, model, this.sanitizeOptions(model, req.options?.[model] ?? defaults[model]))
+      }
     }
+    // Whatever ends up in effect (just set above, or carried over) becomes the new default.
+    for (const model of models) store.setDefault(model, store.getOptions(conv.id, model))
+
     const turn = store.addTurn(conv.id, req.prompt, models)
     if (!turn) throw new Error('conversation not found')
     this.pushConversations()
@@ -155,6 +227,16 @@ export class AskEngine {
   setModels(conversationId: string, models: ModelId[]): void {
     store.setModels(conversationId, this.validateModels(models))
     this.pushConversations()
+  }
+
+  /** conversationId null: just updates what a new conversation starts with for this model. */
+  setOptions(conversationId: string | null, model: ModelId, options: ModelOptions): void {
+    const clean = this.sanitizeOptions(model, options)
+    if (conversationId) {
+      store.setOptions(conversationId, model, clean)
+      this.pushConversations()
+    }
+    store.setDefault(model, clean)
   }
 
   rename(conversationId: string, title: string): void {
@@ -203,6 +285,61 @@ export class AskEngine {
     })
   }
 
+  /**
+   * Dumps the service's current page (an outline of its interactive elements, no chat text) to
+   * a text file in Downloads, and opens the folder there. Never throws - a failure just means
+   * no file, reported back as null.
+   */
+  async diagnose(model: ModelId): Promise<string | null> {
+    try {
+      const adapter = adapterFor(model)
+      const page = this.getOrCreatePage(model)
+      const current = page.webContents.isDestroyed() ? '' : page.webContents.getURL()
+      const onChatPage = current !== '' && (adapter.isThreadUrl(current) || sameLocation(current, adapter.newChatUrl))
+      if (!onChatPage) {
+        await this.load(page, adapter.newChatUrl)
+        await this.waitFor(page, adapter, (p) => this.isSettled(adapter, p), READY_TIMEOUT_MS)
+      }
+      await this.ensureRuntime(page, adapter)
+      if (page.webContents.isDestroyed()) return null
+
+      const probe = await this.probe(page, adapter)
+      const lines: string[] = []
+      lines.push(`NoteDesk ${app.getVersion()}`)
+      lines.push(model)
+      lines.push(new Date().toISOString())
+      lines.push(originAndPath(page.webContents.isDestroyed() ? '' : page.webContents.getURL()))
+      if (probe) {
+        const { url, challenge, signedIn, composer, generating, answerCount } = probe
+        lines.push(JSON.stringify({ url, challenge, signedIn, composer, generating, answerCount }, null, 2))
+      }
+      lines.push('')
+      lines.push(String((await this.runInWorld(page, adapter, OUTLINE_SCRIPT)) ?? ''))
+
+      if (adapter.page.variant) {
+        const opened = await this.runInWorld(page, adapter, clickFirstVisibleScript(adapter.page.variant.menu))
+        if (opened) {
+          await sleep(700)
+          lines.push('')
+          lines.push('--- with the model menu open ---')
+          lines.push(String((await this.runInWorld(page, adapter, OUTLINE_SCRIPT)) ?? ''))
+          if (!page.webContents.isDestroyed()) {
+            page.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' })
+            page.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' })
+          }
+        }
+      }
+
+      const path = join(app.getPath('downloads'), `notedesk-${model}-page-${diagnosticsStamp(new Date())}.txt`)
+      writeFileSync(path, lines.join('\n'), 'utf8')
+      shell.showItemInFolder(path)
+      return path
+    } catch (err) {
+      console.warn('[ask] diagnose failed for', model, err)
+      return null
+    }
+  }
+
   dispose(): void {
     clearInterval(this.sweepTimer)
     this.unsubscribeSettings()
@@ -237,6 +374,10 @@ export class AskEngine {
     return [...new Set(models)].filter((m) => enabled.has(m)).slice(0, MAX_COMPARE_MODELS)
   }
 
+  private sanitizeOptions(model: ModelId, options: unknown): ModelOptions {
+    return sanitizeModelOptions(options, capabilitiesOf(adapterFor(model)))
+  }
+
   // ---------------------------------------------------------------- pages
 
   private getOrCreatePage(model: ModelId): ModelPage {
@@ -268,7 +409,15 @@ export class AskEngine {
     })
     wc.on('render-process-gone', () => this.destroyPage(model))
     wc.on('destroyed', () => this.pageMap.delete(model))
-    const page: ModelPage = { win, webContents: wc, lastActivity: Date.now(), queue: Promise.resolve(), currentJob: null }
+    const page: ModelPage = {
+      win,
+      webContents: wc,
+      lastActivity: Date.now(),
+      queue: Promise.resolve(),
+      currentJob: null,
+      appliedOptions: null,
+      appliedThreadUrl: null,
+    }
     this.pageMap.set(model, page)
     return page
   }
@@ -337,6 +486,27 @@ export class AskEngine {
 
   private probe(page: ModelPage, adapter: ModelAdapter): Promise<PageProbe | null> {
     return this.runInWorld(page, adapter, PROBE_SCRIPT).then((r) => (r as PageProbe | undefined) ?? null)
+  }
+
+  /** Switches variant/thinking/search on the page to match `options`. Returns short warnings for switches that failed. */
+  private async applyOptions(page: ModelPage, adapter: ModelAdapter, options: ModelOptions): Promise<string[]> {
+    const warnings: string[] = []
+    if (options.variant) {
+      const variant = adapter.variants.find((v) => v.id === options.variant)
+      if (variant) {
+        const result = await this.runInWorld(page, adapter, variantScript(variant.match))
+        if (result === 'missing') warnings.push(t('askWarn.variant', { name: variant.label }))
+      }
+    }
+    if (adapter.page.thinking) {
+      const result = await this.runInWorld(page, adapter, toggleScript('thinking', options.thinking))
+      if (result === 'missing') warnings.push(t('askWarn.thinking'))
+    }
+    if (adapter.page.search) {
+      const result = await this.runInWorld(page, adapter, toggleScript('search', options.search))
+      if (result === 'missing') warnings.push(t('askWarn.search'))
+    }
+    return warnings
   }
 
   /** The page has settled into something we can act on: a composer, a sign-in wall, or a challenge. */
@@ -485,6 +655,20 @@ export class AskEngine {
       this.pushConversations()
       return
     }
+
+    // Switch variant/thinking/search before typing - skip when this page is already on the
+    // same thread with the same switches applied, so a run of follow-ups doesn't re-click them.
+    const targetOptions = store.getOptions(handle.conversationId, handle.model)
+    const pageUrl = page.webContents.isDestroyed() ? '' : page.webContents.getURL()
+    const samePage = page.appliedThreadUrl !== null && sameLocation(page.appliedThreadUrl, pageUrl)
+    if (!samePage || !optionsEqual(page.appliedOptions, targetOptions)) {
+      const warnings = await this.applyOptions(page, adapter, targetOptions)
+      page.appliedOptions = targetOptions
+      page.appliedThreadUrl = page.webContents.isDestroyed() ? '' : page.webContents.getURL()
+      if (warnings.length) setAnswer({ warning: warnings.join(' ') })
+    }
+    setAnswer({ options: targetOptions })
+    if (handle.cancelled) return this.markStopped(handle)
 
     const baseline = ready.answerCount
     const wc = page.webContents

@@ -3,8 +3,8 @@
 // runtimeScript() and run it with new Function(). That doubles as proof the installer really is
 // self-contained - it has already gone through TS-to-JS compilation and been re-parsed once by
 // the time any assertion below runs.
-import { describe, expect, it, beforeEach } from 'vitest'
-import { runtimeScript, HAS_RUNTIME_SCRIPT } from '../../src/main/ask/runtime'
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
+import { runtimeScript, HAS_RUNTIME_SCRIPT, toggleScript, variantScript, OUTLINE_SCRIPT } from '../../src/main/ask/runtime'
 import type { PageConfig } from '../../src/main/ask/types'
 
 function install(config: PageConfig): void {
@@ -271,6 +271,327 @@ describe('clickSend / clickStop / composerText', () => {
   it('composerText is empty with no composer', () => {
     install(base)
     expect(window.__ndAsk!.composerText()).toBe('')
+  })
+})
+
+describe('setToggle: button', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('clicks an unpressed button and reports ok', async () => {
+    document.body.innerHTML = '<button id="think" aria-pressed="false">Thinking</button>'
+    const btn = document.getElementById('think')!
+    btn.addEventListener('click', () => btn.setAttribute('aria-pressed', 'true'))
+    install({ ...base, thinking: { button: ['#think'] } })
+    const result = await window.__ndAsk!.setToggle('thinking', true)
+    expect(result).toBe('ok')
+    expect(btn.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('does not click when already in the desired state', async () => {
+    document.body.innerHTML = '<button id="think" aria-pressed="true">Thinking</button>'
+    let clicked = false
+    document.getElementById('think')!.addEventListener('click', () => {
+      clicked = true
+    })
+    install({ ...base, thinking: { button: ['#think'] } })
+    const result = await window.__ndAsk!.setToggle('thinking', true)
+    expect(result).toBe('unchanged')
+    expect(clicked).toBe(false)
+  })
+
+  it('returns missing when the button is not on the page', async () => {
+    install({ ...base, thinking: { button: ['#nope-here'] } })
+    expect(await window.__ndAsk!.setToggle('thinking', true)).toBe('missing')
+  })
+
+  it('returns missing for an option the page has no config for at all', async () => {
+    install(base)
+    expect(await window.__ndAsk!.setToggle('search', true)).toBe('missing')
+  })
+
+  it('reads aria-checked and a class token ("active"), not just aria-pressed', async () => {
+    document.body.innerHTML = '<button id="a" aria-checked="true">A</button><button id="b" class="btn is-active">B</button>'
+    install({ ...base, thinking: { button: ['#a'] } })
+    expect(await window.__ndAsk!.setToggle('thinking', true)).toBe('unchanged')
+    install({ ...base, thinking: { button: ['#b'] } })
+    expect(await window.__ndAsk!.setToggle('thinking', true)).toBe('unchanged')
+  })
+
+  it('a class token "button" is not mistaken for "on"', async () => {
+    document.body.innerHTML = '<button id="c" class="icon-button">C</button>'
+    let clicked = false
+    document.getElementById('c')!.addEventListener('click', () => {
+      clicked = true
+    })
+    install({ ...base, thinking: { button: ['#c'] } })
+    const result = await window.__ndAsk!.setToggle('thinking', true)
+    expect(result).toBe('ok')
+    expect(clicked).toBe(true)
+  })
+
+  it('DeepSeek-style: several broad candidates, itemText picks the one whose own text matches', async () => {
+    document.body.innerHTML = '<div role="button" id="a">Search</div><div role="button" id="b">DeepThink</div>'
+    let clicked = ''
+    document.getElementById('a')!.addEventListener('click', () => {
+      clicked = 'a'
+    })
+    const deepThink = document.getElementById('b')!
+    deepThink.addEventListener('click', () => {
+      clicked = 'b'
+      deepThink.className = 'active'
+    })
+    install({ ...base, thinking: { button: ['div[role="button"]'], itemText: ['DeepThink'] } })
+    const result = await window.__ndAsk!.setToggle('thinking', true)
+    expect(result).toBe('ok')
+    expect(clicked).toBe('b')
+  })
+})
+
+describe('setToggle: menu', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function toggleMenuConfig() {
+    return { menu: ['#tools'], item: ['.tools-menu [role="menuitemcheckbox"]'], itemText: ['Web search'] }
+  }
+
+  function buildToolsMenu(checked: boolean): void {
+    document.body.innerHTML =
+      '<button id="tools" type="button">Tools</button>' +
+      '<div class="tools-menu" hidden><div role="menuitemcheckbox" aria-checked="' + String(checked) + '">Web search</div></div>'
+    const menu = document.querySelector('.tools-menu') as HTMLElement
+    const item = document.querySelector('[role="menuitemcheckbox"]') as HTMLElement
+    document.getElementById('tools')!.addEventListener('click', () => {
+      menu.hidden = !menu.hidden
+    })
+    item.addEventListener('click', () => {
+      item.setAttribute('aria-checked', item.getAttribute('aria-checked') !== 'true' ? 'true' : 'false')
+    })
+    document.addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Escape') menu.hidden = true
+    })
+  }
+
+  it('opens the menu, clicks the matching item, then closes the menu', async () => {
+    buildToolsMenu(false)
+    install({ ...base, search: toggleMenuConfig() })
+    const result = await window.__ndAsk!.setToggle('search', true)
+    expect(result).toBe('ok')
+    expect(document.querySelector('[role="menuitemcheckbox"]')!.getAttribute('aria-checked')).toBe('true')
+    expect((document.querySelector('.tools-menu') as HTMLElement).hidden).toBe(true)
+  })
+
+  it('an already-checked item is left alone, but the menu still closes', async () => {
+    buildToolsMenu(true)
+    install({ ...base, search: toggleMenuConfig() })
+    const result = await window.__ndAsk!.setToggle('search', true)
+    expect(result).toBe('unchanged')
+    expect((document.querySelector('.tools-menu') as HTMLElement).hidden).toBe(true)
+  })
+
+  it('reads a nested input[type=checkbox] inside the item when the item itself has no aria state', async () => {
+    document.body.innerHTML =
+      '<button id="tools" type="button">Tools</button>' +
+      '<div class="tools-menu" hidden><label role="menuitemcheckbox"><input type="checkbox"> Web search</label></div>'
+    const menu = document.querySelector('.tools-menu') as HTMLElement
+    document.getElementById('tools')!.addEventListener('click', () => {
+      menu.hidden = !menu.hidden
+    })
+    const checkbox = document.querySelector('input[type="checkbox"]') as HTMLInputElement
+    document.querySelector('[role="menuitemcheckbox"]')!.addEventListener('click', () => {
+      checkbox.checked = !checkbox.checked
+    })
+    install({ ...base, search: toggleMenuConfig() })
+    const result = await window.__ndAsk!.setToggle('search', true)
+    expect(result).toBe('ok')
+    expect(checkbox.checked).toBe(true)
+  })
+
+  it('returns missing (and still closes) when no item matches itemText', async () => {
+    document.body.innerHTML =
+      '<button id="tools" type="button">Tools</button>' +
+      '<div class="tools-menu" hidden><div role="menuitemcheckbox" aria-checked="false">Something else</div></div>'
+    const menu = document.querySelector('.tools-menu') as HTMLElement
+    document.getElementById('tools')!.addEventListener('click', () => {
+      menu.hidden = !menu.hidden
+    })
+    document.addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Escape') menu.hidden = true
+    })
+    install({ ...base, search: toggleMenuConfig() })
+    vi.useFakeTimers()
+    const pending = window.__ndAsk!.setToggle('search', true)
+    await vi.runAllTimersAsync()
+    expect(await pending).toBe('missing')
+    expect(menu.hidden).toBe(true)
+  })
+
+  it('returns missing when the menu button itself is not there', async () => {
+    install({ ...base, search: toggleMenuConfig() })
+    expect(await window.__ndAsk!.setToggle('search', true)).toBe('missing')
+  })
+})
+
+describe('selectVariant', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function buildModelMenu(): { clicked: string[] } {
+    document.body.innerHTML =
+      '<button id="model" type="button">Fast ▾</button>' +
+      '<div class="model-menu" hidden>' +
+      '<div role="menuitem">Pro</div>' +
+      '<div role="menuitem">Pro Max (experimental, show more models)</div>' +
+      '<div role="menuitem">Fast</div>' +
+      '</div>'
+    const menuBtn = document.getElementById('model')!
+    const menu = document.querySelector('.model-menu') as HTMLElement
+    const clicked: string[] = []
+    menuBtn.addEventListener('click', () => {
+      menu.hidden = !menu.hidden
+    })
+    menu.addEventListener('click', (e) => {
+      const target = (e.target as HTMLElement).closest('[role="menuitem"]')
+      if (!target) return
+      clicked.push(target.textContent || '')
+      menu.hidden = true
+    })
+    document.addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Escape') menu.hidden = true
+    })
+    return { clicked }
+  }
+
+  it('clicks the item matching, preferring the shortest match over a longer "show more" entry', async () => {
+    const { clicked } = buildModelMenu()
+    install({ ...base, variant: { menu: ['#model'], item: ['.model-menu [role="menuitem"]'] } })
+    const result = await window.__ndAsk!.selectVariant(['Pro'])
+    expect(result).toBe('ok')
+    expect(clicked).toEqual(['Pro'])
+  })
+
+  it('matches case-insensitively', async () => {
+    const { clicked } = buildModelMenu()
+    install({ ...base, variant: { menu: ['#model'], item: ['.model-menu [role="menuitem"]'] } })
+    const result = await window.__ndAsk!.selectVariant(['fast'])
+    expect(result).toBe('ok')
+    expect(clicked).toEqual(['Fast'])
+  })
+
+  it('returns missing and closes the menu when nothing matches', async () => {
+    buildModelMenu()
+    install({ ...base, variant: { menu: ['#model'], item: ['.model-menu [role="menuitem"]'] } })
+    vi.useFakeTimers()
+    const pending = window.__ndAsk!.selectVariant(['Ultra'])
+    await vi.runAllTimersAsync()
+    expect(await pending).toBe('missing')
+    vi.useRealTimers()
+    expect((document.querySelector('.model-menu') as HTMLElement).hidden).toBe(true)
+  })
+
+  it('returns missing when the picker button is not there', async () => {
+    install({ ...base, variant: { menu: ['#nope'], item: ['.x'] } })
+    expect(await window.__ndAsk!.selectVariant(['Pro'])).toBe('missing')
+  })
+
+  it('returns missing when the page has no variant config', async () => {
+    install(base)
+    expect(await window.__ndAsk!.selectVariant(['Pro'])).toBe('missing')
+  })
+})
+
+describe('outline', () => {
+  it('first line is the title and the origin+pathname, without query or hash', () => {
+    document.title = 'My Chat Page'
+    install(base)
+    const firstLine = window.__ndAsk!.outline().split('\n')[0]!
+    expect(firstLine).toContain('My Chat Page')
+    expect(firstLine).toContain(location.origin + location.pathname)
+    expect(firstLine).not.toContain('?')
+    expect(firstLine).not.toContain('#')
+  })
+
+  it('lists landmarks and controls with their attributes, and hides assistant/user/composer text', () => {
+    document.body.innerHTML =
+      '<header><nav aria-label="Main"><a href="/x">Link text</a></nav></header>' +
+      '<main>' +
+      '<div class="msg assistant"><div class="body">SECRET ANSWER must never appear' +
+      '<button class="copy-btn">Copy SECRET ANSWER label</button></div></div>' +
+      '<div class="msg user">SECRET QUESTION must never appear</div>' +
+      '<textarea id="prompt">SECRET DRAFT must never appear</textarea>' +
+      '<button id="think" aria-pressed="true">Thinking</button>' +
+      '</main>'
+    install({ ...base, assistant: ['.msg.assistant'], composer: ['#prompt'] })
+    const out = window.__ndAsk!.outline()
+    expect(out).not.toContain('SECRET ANSWER')
+    expect(out).not.toContain('SECRET QUESTION')
+    expect(out).not.toContain('SECRET DRAFT')
+    expect(out).toContain('[text hidden]')
+    expect(out).toContain('main')
+    expect(out).toContain('nav')
+    expect(out).toContain('aria-label="Main"')
+    expect(out).toContain('aria-pressed="true"')
+    expect(out).toContain('#think')
+  })
+
+  it('never prints an input value', () => {
+    document.body.innerHTML = '<input id="secretfield" type="text">'
+    ;(document.getElementById('secretfield') as HTMLInputElement).value = 'topsecret123'
+    install(base)
+    expect(window.__ndAsk!.outline()).not.toContain('topsecret123')
+  })
+
+  it('is wrapped in a try/catch and never throws', () => {
+    document.body.innerHTML = '<div class="msg">hi</div>'
+    install(base)
+    expect(() => window.__ndAsk!.outline()).not.toThrow()
+  })
+})
+
+describe('script builders', () => {
+  it('toggleScript resolves through the installed runtime', async () => {
+    document.body.innerHTML = '<button id="think" aria-pressed="false"></button>'
+    document.getElementById('think')!.addEventListener('click', () => {
+      document.getElementById('think')!.setAttribute('aria-pressed', 'true')
+    })
+    install({ ...base, thinking: { button: ['#think'] } })
+    const result = await new Function('return (' + toggleScript('thinking', true) + ')')()
+    expect(result).toBe('ok')
+  })
+
+  it('toggleScript falls back to missing with no runtime installed', () => {
+    const result = new Function('return (' + toggleScript('search', true) + ')')()
+    expect(result).toBe('missing')
+  })
+
+  it('variantScript resolves through the installed runtime', async () => {
+    document.body.innerHTML = '<button id="model">Fast</button><div class="model-menu"><div role="menuitem">Pro</div></div>'
+    install({ ...base, variant: { menu: ['#model'], item: ['.model-menu [role="menuitem"]'] } })
+    const result = await new Function('return (' + variantScript(['Pro']) + ')')()
+    expect(result).toBe('ok')
+  })
+
+  it('variantScript falls back to missing with no runtime installed', () => {
+    const result = new Function('return (' + variantScript(['Pro']) + ')')()
+    expect(result).toBe('missing')
+  })
+
+  it('OUTLINE_SCRIPT evaluates to the outline string through the installed runtime', () => {
+    document.body.innerHTML = '<button>Send</button>'
+    install(base)
+    // eslint-disable-next-line no-eval
+    const result = eval(OUTLINE_SCRIPT)
+    expect(typeof result).toBe('string')
+    expect(result.length).toBeGreaterThan(0)
+  })
+
+  it('OUTLINE_SCRIPT falls back to an empty string with no runtime installed', () => {
+    // eslint-disable-next-line no-eval
+    expect(eval(OUTLINE_SCRIPT)).toBe('')
   })
 })
 

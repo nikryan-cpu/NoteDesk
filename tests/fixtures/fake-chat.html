@@ -38,6 +38,14 @@
   button.stop { background: #e55039; color: white; }
   #login-form { margin: auto; text-align: center; }
   #login-form button { background: #4b7bec; color: white; padding: 10px 20px; }
+  .option-bar { display: flex; gap: 8px; align-items: center; padding: 8px 14px; border-top: 1px solid #2a2b31; }
+  .option-bar button { background: #232428; color: inherit; }
+  .option-bar button[aria-pressed="true"] { background: #4b7bec; color: white; }
+  .menu-wrap { position: relative; }
+  .model-menu, .tools-menu { position: absolute; bottom: 100%; left: 0; margin-bottom: 6px; min-width: 150px; background: #1f2024; border: 1px solid #2a2b31; border-radius: 6px; padding: 4px; z-index: 10; }
+  .model-menu [role="menuitem"], .tools-menu [role="menuitemcheckbox"] { padding: 6px 10px; border-radius: 4px; cursor: pointer; }
+  .model-menu [role="menuitem"]:hover, .tools-menu [role="menuitemcheckbox"]:hover { background: #2a2b31; }
+  .tools-menu [role="menuitemcheckbox"][aria-checked="true"]::before { content: "\2713  "; }
 </style>
 </head>
 <body>
@@ -59,6 +67,17 @@
   var currentChatId = null
   var inChatView = false
   var currentStopFn = null
+
+  // Per-model options a real site would offer through a picker and a couple of toggles - kept
+  // here only for the reply text to prove the runtime actually switched them, not persisted.
+  var currentModel = 'Fast'
+  var thinkingOn = false
+  var searchOn = false
+  var modelButton = null
+  var modelMenu = null
+  var thinkingToggle = null
+  var toolsButton = null
+  var toolsMenu = null
 
   function escapeHtml(s) {
     var map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
@@ -143,7 +162,8 @@
   // Word-by-word reply, built as real DOM nodes (never innerHTML of the prompt itself) so a
   // prompt containing "<" or "&" cannot break the page.
   function buildReplyChunks(replyModel, prompt, turnIndex) {
-    var words = ('reply to: ' + prompt + ' (turn ' + turnIndex + ')').split(/\s+/)
+    var state = '[model=' + currentModel + ' thinking=' + (thinkingOn ? 'on' : 'off') + ' search=' + (searchOn ? 'on' : 'off') + ']'
+    var words = ('reply to: ' + prompt + ' (turn ' + turnIndex + ') ' + state).split(/\s+/)
     var chunks = [{ type: 'open-strong' }, { type: 'text', value: replyModel }, { type: 'close-strong' }]
     for (var i = 0; i < words.length; i++) {
       chunks.push({ type: 'text', value: ' ' + words[i] })
@@ -238,6 +258,22 @@
     })
   }
 
+  function closeAllMenus() {
+    if (modelMenu) modelMenu.hidden = true
+    if (toolsMenu) toolsMenu.hidden = true
+    if (modelButton) modelButton.setAttribute('aria-expanded', 'false')
+    if (toolsButton) toolsButton.setAttribute('aria-expanded', 'false')
+  }
+
+  function toggleMenu(menu, button) {
+    var opening = menu.hidden
+    closeAllMenus()
+    if (opening) {
+      menu.hidden = false
+      button.setAttribute('aria-expanded', 'true')
+    }
+  }
+
   function showChat(chatId) {
     app.innerHTML =
       '<header>' +
@@ -245,6 +281,22 @@
       '<span id="account">Signed in</span>' +
       '</header>' +
       '<div id="messages"></div>' +
+      '<div class="option-bar">' +
+      '<div class="menu-wrap">' +
+      '<button id="model-button" type="button" aria-haspopup="true" aria-expanded="false">Fast ▾</button>' +
+      '<div class="model-menu" hidden>' +
+      '<div role="menuitem" data-value="Fast">Fast</div>' +
+      '<div role="menuitem" data-value="Pro">Pro</div>' +
+      '</div>' +
+      '</div>' +
+      '<button id="thinking-toggle" type="button" aria-pressed="false">Thinking</button>' +
+      '<div class="menu-wrap">' +
+      '<button id="tools-button" type="button" aria-haspopup="true" aria-expanded="false">Tools</button>' +
+      '<div class="tools-menu" hidden>' +
+      '<div role="menuitemcheckbox" aria-checked="false">Web search</div>' +
+      '</div>' +
+      '</div>' +
+      '</div>' +
       '<div class="composer-bar">' +
       '<textarea id="prompt" placeholder="Ask anything"></textarea>' +
       '<button class="send" type="button">Send</button>' +
@@ -255,6 +307,11 @@
     promptEl = document.getElementById('prompt')
     sendBtn = document.querySelector('button.send')
     stopBtn = document.querySelector('button.stop')
+    modelButton = document.getElementById('model-button')
+    modelMenu = document.querySelector('.model-menu')
+    thinkingToggle = document.getElementById('thinking-toggle')
+    toolsButton = document.getElementById('tools-button')
+    toolsMenu = document.querySelector('.tools-menu')
 
     if (chatId) renderStoredMessages(chatId)
 
@@ -268,6 +325,43 @@
         handleSend()
       }
       // Shift+Enter: let the browser insert the newline itself
+    })
+
+    modelButton.addEventListener('click', function (e) {
+      e.stopPropagation()
+      toggleMenu(modelMenu, modelButton)
+    })
+    modelMenu.addEventListener('click', function (e) {
+      var item = e.target.closest('[role="menuitem"]')
+      if (!item) return
+      currentModel = item.getAttribute('data-value') || item.textContent.trim()
+      modelButton.textContent = currentModel + ' ▾'
+      closeAllMenus()
+    })
+
+    thinkingToggle.addEventListener('click', function () {
+      thinkingOn = !thinkingOn
+      thinkingToggle.setAttribute('aria-pressed', thinkingOn ? 'true' : 'false')
+    })
+
+    toolsButton.addEventListener('click', function (e) {
+      e.stopPropagation()
+      toggleMenu(toolsMenu, toolsButton)
+    })
+    toolsMenu.addEventListener('click', function (e) {
+      var item = e.target.closest('[role="menuitemcheckbox"]')
+      if (!item) return
+      searchOn = !searchOn
+      item.setAttribute('aria-checked', searchOn ? 'true' : 'false')
+      // a checkbox entry does not close its menu on click, only Escape/outside click does
+    })
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeAllMenus()
+    })
+    document.addEventListener('click', function (e) {
+      if (modelMenu && !modelMenu.hidden && !modelMenu.contains(e.target)) closeAllMenus()
+      if (toolsMenu && !toolsMenu.hidden && !toolsMenu.contains(e.target)) closeAllMenus()
     })
   }
 

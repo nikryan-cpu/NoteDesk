@@ -1,12 +1,17 @@
 // Ask conversation history: kept in userData 'ask-history.json'. Each conversation remembers
 // its own thread URL per model, so a follow-up prompt continues the same chat on the service.
+// The file also holds "defaults": the options last used per model, the starting point offered
+// for a new conversation.
 import {
   conversationSummary,
+  sanitizeModelOptions,
   titleFromPrompt,
+  DEFAULT_MODEL_OPTIONS,
   type AskAnswer,
   type AskConversation,
   type AskConversationSummary,
   type AskTurn,
+  type ModelOptions,
 } from '@shared/ask'
 import { isModelId, type ModelId } from '@shared/services'
 import { readJson, writeJson } from '../store'
@@ -16,7 +21,12 @@ const MAX_CONVERSATIONS = 300
 const INTERRUPTED = 'NoteDesk closed while this was still answering'
 const RUNNING = new Set(['queued', 'sending', 'streaming'])
 
-let conversations: AskConversation[] | null = null
+interface StoreFile {
+  conversations: AskConversation[]
+  defaults: Partial<Record<ModelId, ModelOptions>>
+}
+
+let file: StoreFile | null = null
 let seq = 0
 
 function newId(prefix: string): string {
@@ -68,13 +78,32 @@ function isConversation(v: unknown): v is AskConversation {
   )
 }
 
-/** Loads the file once and fixes up answers an app quit interrupted mid-flight. */
-function load(): AskConversation[] {
-  if (conversations) return conversations
+/** Keeps only known model ids and runs every entry through sanitizeModelOptions. */
+function sanitizeOptionsMap(input: unknown): Partial<Record<ModelId, ModelOptions>> {
+  const out: Partial<Record<ModelId, ModelOptions>> = {}
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return out
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (isModelId(key)) out[key] = sanitizeModelOptions(value)
+  }
+  return out
+}
+
+/** Loads the file once, migrating the old plain-array format and fixing up interrupted answers. */
+function load(): StoreFile {
+  if (file) return file
   const raw = readJson<unknown>(FILE, [])
-  const list = Array.isArray(raw) ? raw.filter(isConversation) : []
-  let dirty = !Array.isArray(raw) || raw.length !== list.length
+  const isOldArray = Array.isArray(raw)
+  const rawConversations = isOldArray
+    ? raw
+    : raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).conversations)
+      ? ((raw as Record<string, unknown>).conversations as unknown[])
+      : []
+  const rawDefaults = !isOldArray && raw && typeof raw === 'object' ? (raw as Record<string, unknown>).defaults : undefined
+
+  const list = rawConversations.filter(isConversation)
+  let dirty = isOldArray || rawConversations.length !== list.length
   for (const c of list) {
+    c.options = sanitizeOptionsMap((c as unknown as Record<string, unknown>).options)
     for (const turn of c.turns) {
       for (const answer of turn.answers) {
         if (RUNNING.has(answer.status)) {
@@ -86,13 +115,13 @@ function load(): AskConversation[] {
       }
     }
   }
-  conversations = list
+  file = { conversations: list, defaults: sanitizeOptionsMap(rawDefaults) }
   if (dirty) persist()
-  return list
+  return file
 }
 
 function persist(): void {
-  writeJson(FILE, () => conversations ?? [])
+  writeJson(FILE, () => file ?? { conversations: [], defaults: {} })
 }
 
 /** Drops the oldest unpinned conversations once the list grows past the cap. */
@@ -107,16 +136,16 @@ function enforceCap(all: AskConversation[]): void {
 }
 
 export function list(): AskConversationSummary[] {
-  const all = [...load()].sort((a, b) => (a.pinned !== b.pinned ? (a.pinned ? -1 : 1) : b.updatedAt - a.updatedAt))
+  const all = [...load().conversations].sort((a, b) => (a.pinned !== b.pinned ? (a.pinned ? -1 : 1) : b.updatedAt - a.updatedAt))
   return all.map(conversationSummary)
 }
 
 export function get(conversationId: string): AskConversation | null {
-  return load().find((c) => c.id === conversationId) ?? null
+  return load().conversations.find((c) => c.id === conversationId) ?? null
 }
 
 export function create(models: ModelId[], prompt: string): AskConversation {
-  const all = load()
+  const all = load().conversations
   const now = Date.now()
   const conv: AskConversation = {
     id: newId('c'),
@@ -126,6 +155,7 @@ export function create(models: ModelId[], prompt: string): AskConversation {
     pinned: false,
     models: [...models],
     threads: {},
+    options: {},
     turns: [],
   }
   all.unshift(conv)
@@ -192,9 +222,34 @@ export function pin(conversationId: string, pinned: boolean): void {
 }
 
 export function remove(conversationId: string): void {
-  const all = load()
+  const all = load().conversations
   const i = all.findIndex((c) => c.id === conversationId)
   if (i < 0) return
   all.splice(i, 1)
+  persist()
+}
+
+/** This model's switches for the given conversation, or the neutral defaults when never set. */
+export function getOptions(conversationId: string, model: ModelId): ModelOptions {
+  const conv = get(conversationId)
+  const found = conv?.options[model]
+  return found ? { ...found } : { ...DEFAULT_MODEL_OPTIONS }
+}
+
+export function setOptions(conversationId: string, model: ModelId, options: ModelOptions): void {
+  const conv = get(conversationId)
+  if (!conv) return
+  conv.options[model] = options
+  conv.updatedAt = Date.now()
+  persist()
+}
+
+/** Options last used per model - the starting point offered for a new conversation. */
+export function getDefaults(): Partial<Record<ModelId, ModelOptions>> {
+  return { ...load().defaults }
+}
+
+export function setDefault(model: ModelId, options: ModelOptions): void {
+  load().defaults[model] = options
   persist()
 }

@@ -4,7 +4,7 @@
 // installer below is shipped as a source string (Function.prototype.toString()) and re-parsed
 // on the page. That means installRuntime must not reach outside its own body: no imports, no
 // module-scope references, every helper declared inside it.
-import type { PageConfig, PageProbe, PageRuntime } from './types'
+import type { PageConfig, PageProbe, PageRuntime, ToggleConfig } from './types'
 
 declare global {
   interface Window {
@@ -829,6 +829,392 @@ export function installRuntime(config: PageConfig): void {
     }
   }
 
+  // --- reading on/off state: aria-*, data-state, or a class token, plus a checkbox/switch
+  // nested inside the element (a menu item is often just a row wrapping the real control) ---
+
+  function textOf(el: Element): string {
+    return (el.textContent || '').replace(/\s+/g, ' ').trim()
+  }
+
+  function elementMatchesText(el: Element, needles?: string[]): boolean {
+    if (!needles || needles.length === 0) return true
+    const text = textOf(el).toLowerCase()
+    for (let i = 0; i < needles.length; i++) {
+      if (text.indexOf(needles[i].toLowerCase()) !== -1) return true
+    }
+    return false
+  }
+
+  // "on" is a substring of plenty of ordinary words (button, content...) so it only counts as
+  // a whole class token; active/selected/checked are specific enough to match as a substring
+  // (is-active, btn--checked...).
+  function classSaysOn(el: Element): boolean {
+    const tokens = (el.getAttribute('class') || '').split(/\s+/)
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i].toLowerCase()
+      if (!t) continue
+      if (t === 'on') return true
+      if (t.indexOf('active') !== -1 || t.indexOf('selected') !== -1 || t.indexOf('checked') !== -1) return true
+    }
+    return false
+  }
+
+  function hasStateAttrs(el: Element): boolean {
+    return el.hasAttribute('aria-pressed') || el.hasAttribute('aria-checked') || el.hasAttribute('aria-selected') || el.hasAttribute('data-state')
+  }
+
+  function readOwnState(el: Element): boolean {
+    const pressed = el.getAttribute('aria-pressed')
+    if (pressed === 'true') return true
+    if (pressed === 'false') return false
+    const checked = el.getAttribute('aria-checked')
+    if (checked === 'true') return true
+    if (checked === 'false') return false
+    const selected = el.getAttribute('aria-selected')
+    if (selected === 'true') return true
+    if (selected === 'false') return false
+    const state = (el.getAttribute('data-state') || '').toLowerCase()
+    if (state === 'on' || state === 'checked' || state === 'active') return true
+    if (state === 'off' || state === 'unchecked' || state === 'inactive') return false
+    return classSaysOn(el)
+  }
+
+  function findNestedToggle(el: Element): Element | null {
+    return safeQueryFirst(el, ['input[type="checkbox"]', '[role="switch"]', '[role="menuitemcheckbox"]', '[role="checkbox"]'])
+  }
+
+  function readState(el: Element): boolean {
+    if (hasStateAttrs(el) || classSaysOn(el)) return readOwnState(el)
+    const nested = findNestedToggle(el)
+    if (!nested) return false
+    if (nested.tagName.toLowerCase() === 'input') return !!(nested as HTMLInputElement).checked
+    return readOwnState(nested)
+  }
+
+  // --- small async helpers for menus: opening one is never instant on a real page ---
+
+  function waitMs(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
+  function waitForVisible(selectors: string[], timeoutMs: number): Promise<Element[]> {
+    return new Promise((resolve) => {
+      const start = Date.now()
+      function check(): void {
+        const found: Element[] = []
+        for (let i = 0; i < selectors.length; i++) {
+          const els = safeQueryAll(document, selectors[i])
+          for (let j = 0; j < els.length; j++) {
+            if (visible(els[j])) found.push(els[j])
+          }
+        }
+        if (found.length > 0 || Date.now() - start >= timeoutMs) {
+          resolve(found)
+          return
+        }
+        setTimeout(check, 50)
+      }
+      check()
+    })
+  }
+
+  function dispatchEscape(): void {
+    const targets: (Document | Element)[] = []
+    const active = document.activeElement
+    if (active && active !== document.body) targets.push(active)
+    targets.push(document)
+    for (let i = 0; i < targets.length; i++) {
+      try {
+        targets[i].dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }))
+      } catch (e) {
+        // some engines are picky about constructing KeyboardEvent - not worth failing over
+      }
+    }
+  }
+
+  async function closeMenu(menuBtn: Element, itemSelectors: string[]): Promise<void> {
+    dispatchEscape()
+    await waitMs(50)
+    if (itemSelectors.length && anyVisible(itemSelectors)) {
+      try {
+        ;(menuBtn as HTMLElement).click()
+      } catch (e) {
+        // ignore - best effort cleanup only
+      }
+      await waitMs(50)
+    }
+  }
+
+  // --- setToggle: a direct button, or a menu with an item to find and click ---
+
+  function findButtonCandidate(selectors: string[], itemText?: string[]): Element | null {
+    const candidates: Element[] = []
+    for (let i = 0; i < selectors.length; i++) {
+      const els = safeQueryAll(document, selectors[i])
+      for (let j = 0; j < els.length; j++) {
+        if (isClickable(els[j])) candidates.push(els[j])
+      }
+    }
+    // when several broad selectors all match (a site with no stable id for the toggle), the
+    // one whose own text names the option is the one we want
+    if (itemText && itemText.length) {
+      for (let i = 0; i < candidates.length; i++) {
+        if (elementMatchesText(candidates[i], itemText)) return candidates[i]
+      }
+    }
+    return candidates.length ? candidates[0] : null
+  }
+
+  function findItemByText(items: Element[], itemText?: string[]): Element | null {
+    if (!itemText || itemText.length === 0) return items.length ? items[0] : null
+    for (let i = 0; i < items.length; i++) {
+      if (elementMatchesText(items[i], itemText)) return items[i]
+    }
+    return null
+  }
+
+  async function setToggleButton(cfg: ToggleConfig, on: boolean): Promise<'ok' | 'unchanged' | 'missing'> {
+    const selectors = cfg.button || []
+    const btn = findButtonCandidate(selectors, cfg.itemText)
+    if (!btn) return 'missing'
+    if (readState(btn) === on) return 'unchanged'
+    ;(btn as HTMLElement).click()
+    await waitMs(150)
+    // re-read: the button may have been replaced by the click (a re-render, a new element)
+    const after = findButtonCandidate(selectors, cfg.itemText)
+    return after ? 'ok' : 'missing'
+  }
+
+  async function setToggleMenu(cfg: ToggleConfig, on: boolean): Promise<'ok' | 'unchanged' | 'missing'> {
+    const menuSelectors = cfg.menu || []
+    const itemSelectors = cfg.item || []
+    const menuBtn = firstUsable(menuSelectors, isClickable)
+    if (!menuBtn) return 'missing'
+    ;(menuBtn as HTMLElement).click()
+    const items = await waitForVisible(itemSelectors, 1500)
+    if (items.length === 0) {
+      await closeMenu(menuBtn, itemSelectors)
+      return 'missing'
+    }
+    const target = findItemByText(items, cfg.itemText)
+    if (!target) {
+      await closeMenu(menuBtn, itemSelectors)
+      return 'missing'
+    }
+    const result: 'ok' | 'unchanged' = readState(target) === on ? 'unchanged' : 'ok'
+    if (result === 'ok') {
+      ;(target as HTMLElement).click()
+      await waitMs(150)
+    }
+    await closeMenu(menuBtn, itemSelectors)
+    return result
+  }
+
+  async function setToggle(kind: 'thinking' | 'search', on: boolean): Promise<'ok' | 'unchanged' | 'missing'> {
+    try {
+      const cfg = config[kind]
+      if (!cfg) return 'missing'
+      if (cfg.button && cfg.button.length) return await setToggleButton(cfg, on)
+      if (cfg.menu && cfg.menu.length) return await setToggleMenu(cfg, on)
+      return 'missing'
+    } catch (e) {
+      return 'missing'
+    }
+  }
+
+  // --- selectVariant: open the model picker, click the entry that best matches ---
+
+  function bestVariantMatch(items: Element[], match: string[]): Element | null {
+    let best: Element | null = null
+    let bestLen = Infinity
+    for (let i = 0; i < items.length; i++) {
+      if (!elementMatchesText(items[i], match)) continue
+      const len = textOf(items[i]).length
+      if (len < bestLen) {
+        bestLen = len
+        best = items[i]
+      }
+    }
+    return best
+  }
+
+  async function selectVariant(match: string[]): Promise<'ok' | 'missing'> {
+    try {
+      const variant = config.variant
+      if (!variant) return 'missing'
+      const menuBtn = firstUsable(variant.menu, isClickable)
+      if (!menuBtn) return 'missing'
+      ;(menuBtn as HTMLElement).click()
+      const items = await waitForVisible(variant.item, 1500)
+      const target = items.length ? bestVariantMatch(items, match) : null
+      if (!target) {
+        await closeMenu(menuBtn, variant.item)
+        return 'missing'
+      }
+      ;(target as HTMLElement).click()
+      await waitMs(200)
+      return 'ok'
+    } catch (e) {
+      return 'missing'
+    }
+  }
+
+  // --- outline: a diagnostics snapshot of the page, with chat content always left out ---
+
+  function collectOutlineSelectors(): string[] {
+    const out: string[] = []
+    function add(list?: string[]): void {
+      if (!list) return
+      for (let i = 0; i < list.length; i++) out.push(list[i])
+    }
+    add(config.composer)
+    add(config.send)
+    add(config.stop)
+    add(config.assistant)
+    add(config.answerBody)
+    add(config.signedOut)
+    add(config.signedIn)
+    add(config.strip)
+    if (config.thinking) {
+      add(config.thinking.button)
+      add(config.thinking.menu)
+      add(config.thinking.item)
+    }
+    if (config.search) {
+      add(config.search.button)
+      add(config.search.menu)
+      add(config.search.item)
+    }
+    if (config.variant) {
+      add(config.variant.menu)
+      add(config.variant.item)
+    }
+    return out
+  }
+
+  // No PageConfig field names the user's own messages - only the assistant's - so this is a
+  // heuristic over the common naming (ChatGPT's data-message-author-role="user", a ".msg.user"
+  // class and the like). Best effort: it only ever widens what gets hidden, never narrows it.
+  function looksLikeUserMessage(el: Element): boolean {
+    const role = (el.getAttribute('data-message-author-role') || el.getAttribute('data-author-role') || '').toLowerCase()
+    if (role === 'user' || role === 'human') return true
+    const cls = (el.getAttribute('class') || '').toLowerCase()
+    return /\b(user|human)\b/.test(cls) && /(msg|message|bubble|turn|question|prompt)/.test(cls)
+  }
+
+  function isSensitiveRoot(el: Element): boolean {
+    if (matchesAny(el, config.assistant)) return true
+    if (matchesAny(el, config.composer)) return true
+    if (looksLikeUserMessage(el)) return true
+    return false
+  }
+
+  function isSkippedSubtree(tag: string): boolean {
+    return tag === 'script' || tag === 'style' || tag === 'noscript' || tag === 'template' || tag === 'svg'
+  }
+
+  function isOutlineLandmark(el: Element, outlineSelectors: string[]): boolean {
+    const tag = el.tagName.toLowerCase()
+    if (tag === 'button' || tag === 'a' || tag === 'input' || tag === 'textarea' || tag === 'select') return true
+    if (tag === 'main' || tag === 'nav' || tag === 'header' || tag === 'footer' || tag === 'form' || tag === 'dialog') return true
+    if (el.hasAttribute('role')) return true
+    const editable = el.getAttribute('contenteditable')
+    if (editable !== null && editable.toLowerCase() !== 'false') return true
+    if (el.hasAttribute('aria-label')) return true
+    if (el.hasAttribute('data-testid')) return true
+    return matchesAny(el, outlineSelectors)
+  }
+
+  // Own text is only ever shown for things a user clicks by their label (buttons, links, menu
+  // entries) - never for a landmark like <main> or <form>, which would just dump page copy.
+  function shortOwnText(el: Element, hidden: boolean): string {
+    const tag = el.tagName.toLowerCase()
+    const role = el.getAttribute('role') || ''
+    const wantsText =
+      tag === 'button' || tag === 'a' || role === 'menuitem' || role === 'menuitemcheckbox' || role === 'menuitemradio' || role === 'option' || role === 'tab'
+    if (!wantsText) return ''
+    if (hidden) return '[text hidden]'
+    const t = textOf(el)
+    return t.length > 40 ? t.slice(0, 40) + '…' : t
+  }
+
+  function describeElement(el: Element, hidden: boolean): string {
+    const tag = el.tagName.toLowerCase()
+    let out = tag
+    if (el.id) out += '#' + el.id
+    const classTokens = (el.getAttribute('class') || '')
+      .trim()
+      .split(/\s+/)
+      .filter((c) => !!c)
+      .slice(0, 4)
+    if (classTokens.length) out += '.' + classTokens.join('.')
+
+    const attrs: string[] = []
+    function pushAttr(name: string): void {
+      const v = el.getAttribute(name)
+      if (v !== null) attrs.push(name + '=' + JSON.stringify(v))
+    }
+    pushAttr('role')
+    pushAttr('aria-label')
+    pushAttr('aria-pressed')
+    pushAttr('aria-checked')
+    pushAttr('aria-selected')
+    pushAttr('aria-expanded')
+    pushAttr('data-state')
+    pushAttr('data-testid')
+    pushAttr('placeholder')
+    pushAttr('type')
+    const field = el as { disabled?: boolean }
+    if (field.disabled) attrs.push('disabled')
+    if (attrs.length) out += ' [' + attrs.join(' ') + ']'
+
+    const text = shortOwnText(el, hidden)
+    if (text) out += ' text=' + JSON.stringify(text)
+    return out
+  }
+
+  function outline(): string {
+    try {
+      const outlineSelectors = collectOutlineSelectors()
+      const lines: string[] = []
+      lines.push((document.title || '(untitled)') + ' — ' + location.origin + location.pathname)
+
+      const maxLines = 2500
+      const maxDepth = 40
+      let printed = 0
+      let truncated = false
+
+      function walk(el: Element, depth: number, printDepth: number, hidden: boolean): void {
+        if (truncated || depth > maxDepth) return
+        const tag = el.tagName.toLowerCase()
+        if (isSkippedSubtree(tag)) return
+        const nowHidden = hidden || isSensitiveRoot(el)
+        const qualifies = isOutlineLandmark(el, outlineSelectors)
+        let nextPrintDepth = printDepth
+        if (qualifies) {
+          if (printed >= maxLines) {
+            truncated = true
+            return
+          }
+          lines.push('  '.repeat(printDepth) + describeElement(el, nowHidden))
+          printed++
+          nextPrintDepth = printDepth + 1
+        }
+        const kids = el.children
+        for (let i = 0; i < kids.length; i++) {
+          if (truncated) break
+          walk(kids[i], depth + 1, nextPrintDepth, nowHidden)
+        }
+      }
+
+      if (document.body) walk(document.body, 0, 0, false)
+      if (truncated) lines.push('… (truncated)')
+      return lines.join('\n')
+    } catch (e) {
+      return ''
+    }
+  }
+
   // --- the API exposed as window.__ndAsk ---
 
   function probe(): PageProbe {
@@ -896,6 +1282,9 @@ export function installRuntime(config: PageConfig): void {
     clickSend,
     clickStop,
     composerText,
+    setToggle,
+    selectVariant,
+    outline,
   }
   // Plain reassignment: nothing above registers a listener or timer outside a single call,
   // so there is no old state to tear down - the previous instance is just dropped.
@@ -913,3 +1302,15 @@ export const SEND_SCRIPT = 'window.__ndAsk ? window.__ndAsk.clickSend() : false'
 export const STOP_SCRIPT = 'window.__ndAsk ? window.__ndAsk.clickStop() : false'
 export const COMPOSER_TEXT_SCRIPT = "window.__ndAsk ? window.__ndAsk.composerText() : ''"
 export const HAS_RUNTIME_SCRIPT = "typeof window.__ndAsk === 'object'"
+
+/** Source for setToggle('thinking' | 'search', on): the engine passes the result straight through. */
+export function toggleScript(kind: 'thinking' | 'search', on: boolean): string {
+  return `window.__ndAsk ? window.__ndAsk.setToggle(${JSON.stringify(kind)}, ${on}) : 'missing'`
+}
+
+/** Source for selectVariant(match). */
+export function variantScript(match: string[]): string {
+  return `window.__ndAsk ? window.__ndAsk.selectVariant(${JSON.stringify(match)}) : 'missing'`
+}
+
+export const OUTLINE_SCRIPT = "window.__ndAsk ? window.__ndAsk.outline() : ''"

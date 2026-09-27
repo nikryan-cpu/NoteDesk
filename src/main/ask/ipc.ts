@@ -1,5 +1,6 @@
 // IPC surface for the Ask window. Registered through the same `handle` the shell's channels use,
 // so every ask:* call gets the same sender trust check.
+import { sanitizeModelOptions } from '@shared/ask'
 import type { InvokeChannel, InvokeMap } from '@shared/ipc'
 import { isModelId, type ModelId } from '@shared/services'
 import type { AskEngine } from './engine'
@@ -45,4 +46,10 @@ export function registerAskIpc(engine: AskEngine, handle: Handle): void {
   handle('ask:checkModels', (models) => engine.checkModels(Array.isArray(models) ? cleanModels(models) : undefined))
   handle('ask:login', (model) => engine.login(requireModel(model)))
   handle('ask:showPage', (model) => engine.showPage(requireModel(model)))
+
+  handle('ask:setOptions', (conversationId, model, options) => {
+    const id = typeof conversationId === 'string' ? conversationId.slice(0, 100) : null
+    engine.setOptions(id, requireModel(model), sanitizeModelOptions(options))
+  })
+  handle('ask:diagnose', (model) => engine.diagnose(requireModel(model)))
 }

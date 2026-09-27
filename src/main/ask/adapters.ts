@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { ModelId } from '@shared/services'
 import { SERVICES, isChatUrl } from '@shared/services'
-import type { ModelAdapter, PageConfig } from './types'
+import type { AdapterVariant, ModelAdapter, PageConfig } from './types'
 
 function parseUrl(raw: string): URL | null {
   try {
@@ -30,7 +30,20 @@ const geminiPage: PageConfig = {
   signedOut: ['a[href*="ServiceLogin"]', 'a[href*="accounts.google.com/v3/signin"]', 'a[href*="accounts.google.com/ServiceLogin"]'],
   signedIn: ['a[aria-label*="Google Account" i]', 'img.gb_P', '[data-ogsr-up]'],
   submitWith: 'enter',
+  // Gemini has no separate web-search toggle (it searches on its own when it decides to), and
+  // "Thinking" is one of the picker entries below rather than a switch of its own - so neither
+  // `thinking` nor `search` is set here.
+  variant: {
+    menu: ['[data-test-id="bard-mode-menu-button"]', 'button[aria-label*="mode" i]', 'button.input-area-switch', 'button.gds-mode-switch-button'],
+    item: ['[data-test-id="bard-mode-list-button"]', '[role="menuitemradio"]', '[role="menuitem"]'],
+  },
 }
+
+const geminiVariants: AdapterVariant[] = [
+  { id: 'fast', label: 'Fast', match: ['Fast', 'Flash'] },
+  { id: 'thinking', label: 'Thinking', match: ['Thinking'] },
+  { id: 'pro', label: 'Pro', match: ['Pro'] },
+]
 
 function isGeminiLogin(raw: string): boolean {
   const url = parseUrl(raw)
@@ -44,6 +57,7 @@ const gemini: ModelAdapter = {
   isThreadUrl: (url) => isChatUrl(url, 'gemini'),
   isLoginUrl: isGeminiLogin,
   page: geminiPage,
+  variants: geminiVariants,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -59,7 +73,29 @@ const claudePage: PageConfig = {
   signedOut: ['input[type="email"]', 'button[data-testid="login-with-google"]', 'button[data-testid="login-with-sso"]'],
   signedIn: ['[data-testid="user-menu-button"]'],
   submitWith: 'enter',
+  // Extended thinking and web search both live in the same tools/settings menu next to the
+  // composer, not as their own buttons.
+  thinking: {
+    menu: ['[data-testid="input-menu-tools"]', 'button[aria-label*="tools" i]', 'button[aria-label*="settings" i]'],
+    item: ['[role="menuitem"]', '[role="menuitemcheckbox"]'],
+    itemText: ['Extended thinking', 'Think'],
+  },
+  search: {
+    menu: ['[data-testid="input-menu-tools"]', 'button[aria-label*="tools" i]', 'button[aria-label*="settings" i]'],
+    item: ['[role="menuitem"]', '[role="menuitemcheckbox"]'],
+    itemText: ['Web search', 'Search'],
+  },
+  variant: {
+    menu: ['[data-testid="model-selector-dropdown"]', 'button[aria-label*="model" i]'],
+    item: ['[role="menuitem"]', '[role="option"]'],
+  },
 }
+
+const claudeVariants: AdapterVariant[] = [
+  { id: 'opus', label: 'Opus', match: ['Opus'] },
+  { id: 'sonnet', label: 'Sonnet', match: ['Sonnet'] },
+  { id: 'haiku', label: 'Haiku', match: ['Haiku'] },
+]
 
 function isClaudeLogin(raw: string): boolean {
   const url = parseUrl(raw)
@@ -73,6 +109,7 @@ const claude: ModelAdapter = {
   isThreadUrl: (url) => isChatUrl(url, 'claude'),
   isLoginUrl: isClaudeLogin,
   page: claudePage,
+  variants: claudeVariants,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -88,7 +125,29 @@ const chatgptPage: PageConfig = {
   signedOut: ['[data-testid="login-button"]', 'button[data-testid="welcome-login-button"]'],
   signedIn: ['[data-testid="accounts-profile-button"]', '[data-testid="profile-button"]'],
   submitWith: 'enter',
+  // Both search and "think longer" live behind the "+" button next to the composer.
+  thinking: {
+    menu: ['[data-testid="composer-plus-btn"]', 'button[aria-label*="Add" i]'],
+    item: ['[role="menuitem"]', '[role="menuitemradio"]'],
+    itemText: ['Think longer', 'Thinking'],
+  },
+  search: {
+    menu: ['[data-testid="composer-plus-btn"]', 'button[aria-label*="Add" i]'],
+    item: ['[role="menuitem"]', '[role="menuitemradio"]'],
+    itemText: ['Web search', 'Search the web'],
+  },
+  variant: {
+    menu: ['[data-testid="model-switcher-dropdown-button"]', 'button[aria-label*="Model selector" i]'],
+    item: ['[role="menuitem"]', '[role="menuitemradio"]', '[data-testid^="model-switcher-"]'],
+  },
 }
+
+const chatgptVariants: AdapterVariant[] = [
+  { id: 'auto', label: 'Auto', match: ['Auto'] },
+  { id: 'instant', label: 'Instant', match: ['Instant'] },
+  { id: 'thinking', label: 'Thinking', match: ['Thinking'] },
+  { id: 'pro', label: 'Pro', match: ['Pro'] },
+]
 
 function isChatgptLogin(raw: string): boolean {
   const url = parseUrl(raw)
@@ -104,6 +163,7 @@ const chatgpt: ModelAdapter = {
   isThreadUrl: (url) => isChatUrl(url, 'chatgpt'),
   isLoginUrl: isChatgptLogin,
   page: chatgptPage,
+  variants: chatgptVariants,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -119,6 +179,18 @@ const deepseekPage: PageConfig = {
   signedOut: ['input[type="password"]', 'a[href*="sign_in"]'],
   signedIn: ['div[class*="avatar" i]', '[class*="user-avatar" i]'],
   submitWith: 'enter',
+  // DeepThink and Search are plain toggle buttons next to the composer, but they are
+  // `div[role="button"]` with no id or aria-label to key off - CSS cannot match on text, so the
+  // selector list stays broad and `itemText` picks the right one out of whatever matches.
+  thinking: {
+    button: ['div[role="button"]', 'button', 'div[class*="button" i]'],
+    itemText: ['DeepThink'],
+  },
+  search: {
+    button: ['div[role="button"]', 'button', 'div[class*="button" i]'],
+    itemText: ['Search'],
+  },
+  // No variant picker: DeepSeek is a single model in this chat UI.
 }
 
 function isDeepseekLogin(raw: string): boolean {
@@ -133,6 +205,7 @@ const deepseek: ModelAdapter = {
   isThreadUrl: (url) => isChatUrl(url, 'deepseek'),
   isLoginUrl: isDeepseekLogin,
   page: deepseekPage,
+  variants: [],
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -147,7 +220,27 @@ const qwenPage: PageConfig = {
   signedOut: ['a[href*="/auth"]', 'button[class*="login" i]'],
   signedIn: ['[class*="avatar" i]', '[class*="user-menu" i]'],
   submitWith: 'enter',
+  // Thinking and web search are toggle buttons in the composer's tool row, without a stable
+  // id - a broad selector list plus itemText, same approach as DeepSeek's.
+  thinking: {
+    button: ['button', 'div[role="button"]'],
+    itemText: ['Thinking', 'Think'],
+  },
+  search: {
+    button: ['button', 'div[role="button"]'],
+    itemText: ['Search', 'Web'],
+  },
+  variant: {
+    menu: ['button[aria-label*="model" i]', '#model-selector', '.model-selector button'],
+    item: ['[role="menuitem"]', '[role="option"]', 'li'],
+  },
 }
+
+const qwenVariants: AdapterVariant[] = [
+  { id: 'max', label: 'Max', match: ['Max'] },
+  { id: 'plus', label: 'Plus', match: ['Plus'] },
+  { id: 'flash', label: 'Flash', match: ['Flash', 'Turbo'] },
+]
 
 function isQwenLogin(raw: string): boolean {
   const url = parseUrl(raw)
@@ -161,6 +254,7 @@ const qwen: ModelAdapter = {
   isThreadUrl: (url) => isChatUrl(url, 'qwen'),
   isLoginUrl: isQwenLogin,
   page: qwenPage,
+  variants: qwenVariants,
 }
 
 export const ADAPTERS: Record<ModelId, ModelAdapter> = {
@@ -184,7 +278,24 @@ const fakePage: PageConfig = {
   signedOut: ['#login-form'],
   signedIn: ['#account'],
   submitWith: 'enter',
+  thinking: {
+    button: ['#thinking-toggle'],
+  },
+  search: {
+    menu: ['#tools-button'],
+    item: ['.tools-menu [role="menuitemcheckbox"]'],
+    itemText: ['Web search'],
+  },
+  variant: {
+    menu: ['#model-button'],
+    item: ['.model-menu [role="menuitem"]'],
+  },
 }
+
+const fakeVariants: AdapterVariant[] = [
+  { id: 'fast', label: 'Fast', match: ['Fast'] },
+  { id: 'pro', label: 'Pro', match: ['Pro'] },
+]
 
 function fixtureUrl(id: ModelId): string {
   const path = join(app.getAppPath(), 'tests/fixtures/fake-chat.html')
@@ -200,6 +311,7 @@ function fakeAdapter(id: ModelId): ModelAdapter {
     isThreadUrl: (url) => url.indexOf('#/c/') !== -1,
     isLoginUrl: (url) => url.indexOf('#/login') !== -1,
     page: fakePage,
+    variants: fakeVariants,
   }
 }
 

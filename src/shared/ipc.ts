@@ -6,6 +6,7 @@ import type {
   AskInit,
   AskSendRequest,
   AskSendResult,
+  ModelOptions,
   ModelStatus,
 } from './ask'
 import type { Locale, Profile, PublicSettings, Settings } from './settings'
@@ -220,6 +221,10 @@ export interface InvokeMap {
   'ask:login': (model: ModelId) => void
   /** Opens a visible window with the page the engine is on (to pass a captcha etc.). */
   'ask:showPage': (model: ModelId) => void
+  /** Options for one model in a conversation (null: the defaults for new conversations). */
+  'ask:setOptions': (conversationId: string | null, model: ModelId, options: ModelOptions) => void
+  /** Saves an outline of the service's page (no chat text) to Downloads; returns the file path. */
+  'ask:diagnose': (model: ModelId) => string | null
 }
 
 export interface EventMap {
@@ -303,6 +308,8 @@ export const INVOKE_CHANNELS: readonly InvokeChannel[] = [
   'ask:checkModels',
   'ask:login',
   'ask:showPage',
+  'ask:setOptions',
+  'ask:diagnose',
 ]
 
 export const EVENT_CHANNELS: readonly EventChannel[] = [

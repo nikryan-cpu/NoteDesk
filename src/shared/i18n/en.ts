@@ -435,6 +435,9 @@ export const en = {
   'askContext.header': 'Earlier in this conversation (with other models):',
   'askContext.user': 'Me',
   'askContext.footer': 'My new message:',
+  'askWarn.variant': "Couldn't switch to {name}",
+  'askWarn.thinking': "Couldn't switch reasoning",
+  'askWarn.search': "Couldn't switch web search",
 } as const
 
 export type I18nKey = keyof typeof en

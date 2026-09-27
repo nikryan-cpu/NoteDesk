@@ -437,4 +437,7 @@ export const ru: Record<I18nKey, string> = {
   'askContext.header': 'Ранее в этом разговоре (с другими моделями):',
   'askContext.user': 'Я',
   'askContext.footer': 'Моё новое сообщение:',
+  'askWarn.variant': 'Не удалось переключиться на {name}',
+  'askWarn.thinking': 'Не удалось переключить рассуждения',
+  'askWarn.search': 'Не удалось переключить веб-поиск',
 }

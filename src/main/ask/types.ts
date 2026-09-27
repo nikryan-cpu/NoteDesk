@@ -1,6 +1,7 @@
 // Contract between the Ask engine (engine.ts: hidden pages, queues, history) and the
 // per-service adapters (adapters.ts) plus the page runtime (runtime.ts) that runs inside each
 // service's page, in an isolated JavaScript world.
+import type { ModelCapabilities } from '@shared/ask'
 import type { ModelId } from '@shared/services'
 
 /** Where things are on a service's page. Every list is tried in order; first match wins. */
@@ -23,6 +24,43 @@ export interface PageConfig {
   strip?: string[]
   /** How to submit after the prompt is typed. */
   submitWith: 'enter' | 'button'
+  /** How to switch deeper reasoning on and off. */
+  thinking?: ToggleConfig
+  /** How to switch web search on and off. */
+  search?: ToggleConfig
+  /** How to pick the model variant. */
+  variant?: VariantConfig
+}
+
+/**
+ * A page option that is either a button with an on/off state, or an entry in a menu. The
+ * state is read from aria-pressed / aria-checked / aria-selected / data-state / a class name
+ * containing "active", "selected" or "checked".
+ */
+export interface ToggleConfig {
+  /** Button that toggles the option directly. */
+  button?: string[]
+  /** Otherwise: button that opens a menu (tools, "+", settings)… */
+  menu?: string[]
+  /** …and the menu entries to look through… */
+  item?: string[]
+  /** …picking the one whose text contains any of these (case-insensitive). */
+  itemText?: string[]
+}
+
+export interface VariantConfig {
+  /** Button that opens the model picker. */
+  menu: string[]
+  /** Entries of the opened picker; the one whose text contains the variant's match strings is clicked. */
+  item: string[]
+}
+
+/** A variant as the adapter knows it: what to look for in the picker. */
+export interface AdapterVariant {
+  id: string
+  label: string
+  /** Case-insensitive substrings identifying the entry in the service's model picker. */
+  match: string[]
 }
 
 export interface ModelAdapter {
@@ -35,6 +73,17 @@ export interface ModelAdapter {
   /** True when the page is a sign-in page (redirects there mean "signed out"). */
   isLoginUrl(url: string): boolean
   page: PageConfig
+  /** Variants offered in the Ask window (empty when the service has no picker NoteDesk can use). */
+  variants: AdapterVariant[]
+}
+
+/** What the UI may offer for an adapter. */
+export function capabilitiesOf(adapter: ModelAdapter): ModelCapabilities {
+  return {
+    variants: adapter.variants.map((v) => ({ id: v.id, label: v.label })),
+    thinking: Boolean(adapter.page.thinking),
+    search: Boolean(adapter.page.search),
+  }
 }
 
 /** Snapshot of the page returned by the runtime's probe(). */
@@ -68,6 +117,18 @@ export interface PageRuntime {
   clickStop(): boolean
   /** Text currently in the prompt input (to check that typing and sending worked). */
   composerText(): string
+  /**
+   * Sets an option to on/off. 'ok' = switched, 'unchanged' = already in that state,
+   * 'missing' = the control was not found. May open and close menus, so it is async.
+   */
+  setToggle(kind: 'thinking' | 'search', on: boolean): Promise<'ok' | 'unchanged' | 'missing'>
+  /** Opens the model picker and clicks the entry matching any of `match`. */
+  selectVariant(match: string[]): Promise<'ok' | 'missing'>
+  /**
+   * Outline of the page for diagnostics: interactive elements with their tag, id, classes,
+   * role, aria-*, data-testid and short labels. Never includes message text.
+   */
+  outline(): string
 }
 
 /** Isolated world id for the runtime; any number above 999 is free for embedders. */

@@ -37,6 +37,10 @@ export interface AskAnswer {
   /** Answer as Markdown, updated while it streams. */
   markdown: string
   error?: string
+  /** Non-fatal note, e.g. an option that could not be switched on the service's page. */
+  warning?: string
+  /** Options that were in effect for this answer. */
+  options?: ModelOptions
   startedAt: number
   finishedAt?: number
 }
@@ -59,6 +63,8 @@ export interface AskConversation {
   models: ModelId[]
   /** URL of this conversation's chat on each service, once the service created one. */
   threads: Partial<Record<ModelId, string>>
+  /** Per-model switches (variant, thinking, search) used for the next prompt. */
+  options: Partial<Record<ModelId, ModelOptions>>
   turns: AskTurn[]
 }
 
@@ -80,6 +86,8 @@ export interface AskSendRequest {
   conversationId: string | null
   prompt: string
   models: ModelId[]
+  /** Options per model; stored on the conversation (missing models keep what they had). */
+  options?: Partial<Record<ModelId, ModelOptions>>
 }
 
 export interface AskSendResult {
@@ -101,9 +109,47 @@ export interface AskInit {
   enabledModels: ModelId[]
   /** Preselected models for a new conversation. */
   defaultModels: ModelId[]
+  /** What each service's page lets NoteDesk switch. */
+  capabilities: Record<ModelId, ModelCapabilities>
+  /** Options last used per model, the starting point for a new conversation. */
+  defaultOptions: Partial<Record<ModelId, ModelOptions>>
 }
 
 export const MAX_COMPARE_MODELS = 4
+
+/** Switches on a service's page that NoteDesk sets before typing the prompt. */
+export interface ModelOptions {
+  /** Id of one of the model's variants; '' leaves the service's own choice. */
+  variant: string
+  /** Deeper reasoning (Thinking / DeepThink / extended thinking). */
+  thinking: boolean
+  /** Web search. */
+  search: boolean
+}
+
+export interface ModelVariant {
+  id: string
+  /** Family name as the service shows it (Opus, Instant, Pro…); version numbers change too often. */
+  label: string
+}
+
+export interface ModelCapabilities {
+  variants: ModelVariant[]
+  thinking: boolean
+  search: boolean
+}
+
+export const DEFAULT_MODEL_OPTIONS: ModelOptions = { variant: '', thinking: false, search: false }
+
+export function sanitizeModelOptions(input: unknown, caps?: ModelCapabilities): ModelOptions {
+  const o = typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {}
+  const variant = typeof o['variant'] === 'string' ? o['variant'].slice(0, 40) : ''
+  return {
+    variant: caps && variant && !caps.variants.some((v) => v.id === variant) ? '' : variant,
+    thinking: o['thinking'] === true && (caps?.thinking ?? true),
+    search: o['search'] === true && (caps?.search ?? true),
+  }
+}
 
 export function conversationSummary(c: AskConversation): AskConversationSummary {
   const last = c.turns[c.turns.length - 1]

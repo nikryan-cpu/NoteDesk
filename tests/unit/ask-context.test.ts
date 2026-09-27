@@ -15,7 +15,7 @@ function turn(id: string, prompt: string, answers: [ModelId, string][]): AskTurn
 }
 
 function conv(turns: AskTurn[]): AskConversation {
-  return { id: 'c', title: 't', createdAt: 0, updatedAt: 0, pinned: false, models: ['gemini'], threads: {}, turns }
+  return { id: 'c', title: 't', createdAt: 0, updatedAt: 0, pinned: false, models: ['gemini'], threads: {}, options: {}, turns }
 }
 
 describe('promptWithContext', () => {
