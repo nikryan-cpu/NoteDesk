@@ -154,10 +154,15 @@ need to do this once per install.
 chmod +x NoteDesk-*.AppImage
 ```
 
-**Self-updating.** Windows installs and the Linux AppImage update themselves in the
-background. The macOS build and the `.deb` package can't self-update (no code signing on
-macOS, and `.deb` is meant to be managed by your package manager) — NoteDesk instead
-shows a link to the new release when one is available.
+**Which Windows file?** The installer puts NoteDesk in your user folder and adds shortcuts
+to the desktop and the Start menu. The portable `.exe` is a single file you can keep on
+the desktop or a USB stick; it unpacks itself on every launch, so it starts a bit slower.
+
+**Self-updating.** The Windows installer and the Linux AppImage update themselves in the
+background. The portable `.exe`, the macOS build and the `.deb` package can't (the
+portable file isn't installed anywhere, macOS builds aren't signed, and `.deb` is meant to
+be managed by your package manager) — NoteDesk instead shows a link to the new release
+when one is available.
 
 ## Can't sign in to Google?
 
