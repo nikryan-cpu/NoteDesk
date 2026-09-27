@@ -79,4 +79,9 @@
     align-items: stretch;
     padding: 12px;
   }
+
+  :global([data-theme='glass']) .shot,
+  :global([data-theme='aurora']) .shot {
+    filter: blur(28px) saturate(1.6);
+  }
 </style>

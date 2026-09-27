@@ -63,4 +63,9 @@
     text-overflow: ellipsis;
     padding: 0 12px;
   }
+
+  :global([data-theme='glass']) .topbar,
+  :global([data-theme='aurora']) .topbar {
+    background: linear-gradient(180deg, color-mix(in oklab, var(--surface) 32%, transparent), transparent);
+  }
 </style>

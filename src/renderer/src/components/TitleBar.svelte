@@ -66,4 +66,9 @@
     min-width: 24px;
     height: 100%;
   }
+
+  :global([data-theme='glass']) .titlebar,
+  :global([data-theme='aurora']) .titlebar {
+    background: linear-gradient(180deg, color-mix(in oklab, var(--surface) 32%, transparent), transparent);
+  }
 </style>

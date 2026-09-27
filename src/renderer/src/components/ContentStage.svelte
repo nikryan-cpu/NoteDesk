@@ -74,6 +74,10 @@
   :global([data-surface='glass']) .stage {
     background: color-mix(in oklab, var(--surface) 70%, transparent);
   }
+  /* The native material already blurs the desktop for us here; keep the tint faint. */
+  :global([data-theme='glass'][data-material='true']) .stage {
+    background: color-mix(in oklab, var(--surface) 40%, transparent);
+  }
   .state {
     display: flex;
     flex-direction: column;

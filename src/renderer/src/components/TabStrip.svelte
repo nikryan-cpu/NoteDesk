@@ -280,7 +280,17 @@
       0 0 0 var(--border-w) var(--border);
   }
   :global([data-tab-style='pill'][data-surface='glass']) .tab.active {
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px) saturate(1.8);
+    -webkit-backdrop-filter: blur(12px) saturate(1.8);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      0 1px 2px rgba(0, 0, 0, 0.06),
+      0 0 0 var(--border-w) var(--border);
+  }
+
+  :global([data-theme='aurora']) .strip {
+    background: linear-gradient(120deg, color-mix(in oklab, var(--accent) 10%, transparent), transparent 60%);
+    border-radius: var(--radius);
   }
 
   :global([data-tab-style='underline']) .strip:not(.vertical) .tab {

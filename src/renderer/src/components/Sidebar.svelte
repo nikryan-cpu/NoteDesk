@@ -93,4 +93,16 @@
   .list :global(.strip.vertical) {
     height: auto;
   }
+
+  :global([data-theme='glass']) .sidebar,
+  :global([data-theme='aurora']) .sidebar {
+    background: linear-gradient(180deg, color-mix(in oklab, var(--surface) 55%, transparent), color-mix(in oklab, var(--surface) 28%, transparent));
+    backdrop-filter: blur(calc(var(--blur) * 0.55)) saturate(1.5);
+    -webkit-backdrop-filter: blur(calc(var(--blur) * 0.55)) saturate(1.5);
+    border-right: var(--border-w) solid var(--border);
+  }
+  /* The native material already blurs the desktop for us here; keep the tint faint. */
+  :global([data-theme='glass'][data-material='true']) .sidebar {
+    background: linear-gradient(180deg, color-mix(in oklab, var(--surface) 22%, transparent), color-mix(in oklab, var(--surface) 10%, transparent));
+  }
 </style>
