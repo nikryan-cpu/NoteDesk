@@ -168,10 +168,24 @@ function bootstrap(): void {
       app.quit()
     })
 
+    // Another app may already own a shortcut (desktop chat apps like Ctrl+Alt+Space). Tell the
+    // user once per shortcut instead of failing silently.
+    const warnedHotkeys = new Set<string>()
+    const warnTaken = (accelerator: string) => {
+      if (!accelerator || warnedHotkeys.has(accelerator) || !Notification.isSupported()) return
+      warnedHotkeys.add(accelerator)
+      const keys = accelerator.replace('CommandOrControl', process.platform === 'darwin' ? 'Cmd' : 'Ctrl')
+      const n = new Notification({ title: t('shortcuts.takenTitle', { keys }), body: t('shortcuts.takenBody'), silent: true })
+      n.on('click', () => {
+        main.show()
+        emit('command', 'settings')
+      })
+      n.show()
+    }
     const registerHotkeys = () => {
       const s = getSettings()
-      setGlobalHotkey('toggle', s.hotkeys.toggleWindow, () => main.toggle())
-      setGlobalHotkey('quick', s.hotkeys.quickAsk, () => q.toggle())
+      if (!setGlobalHotkey('toggle', s.hotkeys.toggleWindow, () => main.toggle())) warnTaken(s.hotkeys.toggleWindow)
+      if (!setGlobalHotkey('quick', s.hotkeys.quickAsk, () => q.toggle())) warnTaken(s.hotkeys.quickAsk)
     }
     registerHotkeys()
 

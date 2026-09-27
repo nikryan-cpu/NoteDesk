@@ -235,6 +235,9 @@ export const en = {
   'shortcuts.quickAsk': 'Ask window',
   'shortcuts.record': 'Change',
   'shortcuts.pressKeys': 'Press keys…',
+  'shortcuts.taken': 'Taken by another app',
+  'shortcuts.takenTitle': '{keys} is taken',
+  'shortcuts.takenBody': 'Another app already uses this shortcut. Pick a different one in Settings → Shortcuts.',
   'shortcuts.invalid': 'This shortcut is taken by another app or not allowed.',
   'shortcuts.disabled': 'Off',
   'shortcuts.inApp': 'In the app',
@@ -429,6 +432,9 @@ export const en = {
   // ask engine
   'askLogin.title': 'Sign in to {name}',
   'askShowPage.title': 'Continue with {name}',
+  'askContext.header': 'Earlier in this conversation (with other models):',
+  'askContext.user': 'Me',
+  'askContext.footer': 'My new message:',
 } as const
 
 export type I18nKey = keyof typeof en

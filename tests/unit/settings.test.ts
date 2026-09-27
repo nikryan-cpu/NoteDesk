@@ -176,3 +176,20 @@ describe('resolveLocale', () => {
     expect(resolveLocale('ru', 'en-US')).toBe('ru')
   })
 })
+
+describe('hotkey migration', () => {
+  it('moves untouched pre-2 hotkeys to the new defaults', () => {
+    const s = sanitizeSettings({ version: 1, hotkeys: { toggleWindow: 'CommandOrControl+Shift+Space', quickAsk: 'CommandOrControl+Alt+Space' } })
+    expect(s.hotkeys).toEqual({ toggleWindow: 'CommandOrControl+Shift+Alt+Space', quickAsk: 'CommandOrControl+Shift+Space' })
+  })
+
+  it('keeps hotkeys the user changed', () => {
+    const s = sanitizeSettings({ version: 1, hotkeys: { toggleWindow: 'CommandOrControl+Shift+Space', quickAsk: 'Alt+Q' } })
+    expect(s.hotkeys).toEqual({ toggleWindow: 'CommandOrControl+Shift+Space', quickAsk: 'Alt+Q' })
+  })
+
+  it('does not touch current settings', () => {
+    const s = sanitizeSettings({ version: 2, hotkeys: { toggleWindow: 'CommandOrControl+Shift+Space', quickAsk: 'CommandOrControl+Alt+Space' } })
+    expect(s.hotkeys.quickAsk).toBe('CommandOrControl+Alt+Space')
+  })
+})

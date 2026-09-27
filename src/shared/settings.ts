@@ -80,7 +80,10 @@ export interface Settings {
 
 export const PROFILE_COLORS = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#06b6d4', '#ef4444', '#8b5cf6', '#84cc16']
 
-export const SETTINGS_VERSION = 1
+export const SETTINGS_VERSION = 2
+
+/** Hotkey defaults before 1.2 (Ctrl+Alt+Space clashes with other desktop chat apps). */
+const LEGACY_HOTKEYS = { toggleWindow: 'CommandOrControl+Shift+Space', quickAsk: 'CommandOrControl+Alt+Space' }
 
 export function defaultSettings(): Settings {
   return {
@@ -105,7 +108,7 @@ export function defaultSettings(): Settings {
     deepSleepMinutes: 30,
     hardwareAcceleration: true,
 
-    hotkeys: { toggleWindow: 'CommandOrControl+Shift+Space', quickAsk: 'CommandOrControl+Alt+Space' },
+    hotkeys: { toggleWindow: 'CommandOrControl+Shift+Alt+Space', quickAsk: 'CommandOrControl+Shift+Space' },
     enabledModels: [...EXTRA_MODEL_IDS],
     askModels: ['gemini'],
 
@@ -144,6 +147,15 @@ const bool = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean'
 const HEX = /^#[0-9a-f]{6}$/i
 
 const unique = <T>(list: T[]): T[] => [...new Set(list)]
+
+/** Settings saved before version 2 with untouched hotkeys move to the new defaults. */
+function migrateHotkeys(version: unknown, hotkeys: Settings['hotkeys']): Settings['hotkeys'] {
+  const legacy = typeof version !== 'number' || version < 2
+  if (legacy && hotkeys.toggleWindow === LEGACY_HOTKEYS.toggleWindow && hotkeys.quickAsk === LEGACY_HOTKEYS.quickAsk) {
+    return defaultSettings().hotkeys
+  }
+  return hotkeys
+}
 
 function sanitizeAskModels(input: unknown[], fallback: ModelId[]): ModelId[] {
   const list = unique(input.filter(isModelId)).slice(0, 4)
@@ -201,10 +213,10 @@ export function sanitizeSettings(input: unknown, base: Settings = defaultSetting
     deepSleepMinutes: clampInt(i.deepSleepMinutes, 0, 480, d.deepSleepMinutes),
     hardwareAcceleration: bool(i.hardwareAcceleration, d.hardwareAcceleration),
 
-    hotkeys: {
+    hotkeys: migrateHotkeys(i.version, {
       toggleWindow: str(hk.toggleWindow, d.hotkeys.toggleWindow, 60),
       quickAsk: str(hk.quickAsk, d.hotkeys.quickAsk, 60),
-    },
+    }),
     enabledModels: Array.isArray(i.enabledModels)
       ? unique(i.enabledModels.filter((m): m is ModelId => isModelId(m) && m !== 'gemini'))
       : d.enabledModels,

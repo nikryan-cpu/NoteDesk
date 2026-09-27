@@ -237,6 +237,9 @@ export const ru: Record<I18nKey, string> = {
   'shortcuts.quickAsk': 'Окно «Спросить»',
   'shortcuts.record': 'Изменить',
   'shortcuts.pressKeys': 'Нажмите клавиши…',
+  'shortcuts.taken': 'Занято другой программой',
+  'shortcuts.takenTitle': 'Сочетание {keys} занято',
+  'shortcuts.takenBody': 'Его уже использует другая программа. Выберите другое в Настройки → Горячие клавиши.',
   'shortcuts.invalid': 'Это сочетание занято другим приложением или недоступно.',
   'shortcuts.disabled': 'Выкл.',
   'shortcuts.inApp': 'Внутри приложения',
@@ -431,4 +434,7 @@ export const ru: Record<I18nKey, string> = {
   // ask engine
   'askLogin.title': 'Вход в {name}',
   'askShowPage.title': 'Продолжить в {name}',
+  'askContext.header': 'Ранее в этом разговоре (с другими моделями):',
+  'askContext.user': 'Я',
+  'askContext.footer': 'Моё новое сообщение:',
 }

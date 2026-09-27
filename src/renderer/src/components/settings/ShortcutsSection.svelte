@@ -106,6 +106,23 @@
       if (recordingWhich) void nd.invoke('hotkey:recording', false)
     }
   })
+
+  // A shortcut another app already owns can't be registered; say so instead of failing silently.
+  let taken = $state<Record<HotkeyName, boolean>>({ toggleWindow: false, quickAsk: false })
+  $effect(() => {
+    if (recordingWhich) return
+    for (const which of ['toggleWindow', 'quickAsk'] as const) {
+      const accel = ui.settings.hotkeys[which]
+      if (!accel) {
+        taken[which] = false
+        continue
+      }
+      void nd
+        .invoke('hotkey:check', accel)
+        .then((ok) => (taken[which] = !ok))
+        .catch(() => {})
+    }
+  })
 </script>
 
 <svelte:window onkeydowncapture={onWindowKeydown} />
@@ -118,6 +135,7 @@
     {:else}
       {#if ui.settings.hotkeys[which]}
         {#each acceleratorKeys(ui.settings.hotkeys[which], ui.platform) as k, i (i)}<span class="kbd">{k}</span>{/each}
+        {#if taken[which]}<span class="taken">{t('shortcuts.taken')}</span>{/if}
       {:else}
         <span class="faint">{t('shortcuts.disabled')}</span>
       {/if}
@@ -151,6 +169,14 @@
     font-size: 12px;
     font-weight: 550;
     color: var(--accent);
+  }
+  .taken {
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--danger);
+    background: color-mix(in oklab, var(--danger) 12%, transparent);
   }
   .recording.danger {
     color: var(--danger);
