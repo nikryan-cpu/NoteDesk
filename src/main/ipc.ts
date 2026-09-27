@@ -1,4 +1,4 @@
-// IPC handlers for the shell UI. Only NoteDesk's own pages (shell + Quick Ask header) may call
+// IPC handlers for the shell UI. Only NoteDesk's own pages (shell + Ask window) may call
 // them; Google pages never get the shell preload, and senders are checked anyway.
 import { app, dialog, ipcMain, Menu, nativeTheme, shell, type IpcMainInvokeEvent } from 'electron'
 import { rmSync } from 'node:fs'

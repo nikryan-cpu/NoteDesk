@@ -1,6 +1,6 @@
 import '@fontsource-variable/inter'
 import './styles/base.css'
 import { mount } from 'svelte'
-import QuickHeader from './QuickHeader.svelte'
+import AskApp from './ask/AskApp.svelte'
 
-mount(QuickHeader, { target: document.getElementById('quick')! })
+mount(AskApp, { target: document.getElementById('quick')! })

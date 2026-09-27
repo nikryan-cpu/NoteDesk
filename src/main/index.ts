@@ -160,7 +160,7 @@ function bootstrap(): void {
     main.win.on('show', rebuildTrayMenu)
     main.win.on('hide', rebuildTrayMenu)
     // The main window is never recreated, so once it really closes the app is done
-    // (a hidden Quick Ask window would otherwise keep the process alive).
+    // (a hidden Ask window would otherwise keep the process alive).
     main.win.on('closed', () => {
       main.quitting = true
       q.destroy()

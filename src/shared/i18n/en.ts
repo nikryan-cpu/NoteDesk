@@ -64,7 +64,7 @@ export const en = {
 
   'tray.show': 'Show NoteDesk',
   'tray.hide': 'Hide NoteDesk',
-  'tray.quickAsk': 'Quick Ask',
+  'tray.quickAsk': 'Ask',
   'tray.sleepAll': 'Put all tabs to sleep',
   'tray.settings': 'Settings',
   'tray.quit': 'Quit NoteDesk',
@@ -126,7 +126,7 @@ export const en = {
   'action.shortcuts': 'Keyboard shortcuts',
   'action.find': 'Find in page',
   'action.reopenTab': 'Reopen closed tab',
-  'action.quickAsk': 'Open Quick Ask',
+  'action.quickAsk': 'Open the Ask window',
   'action.clearHistory': 'Clear recent list',
   'action.prompts': 'Insert a prompt',
   'action.managePrompts': 'Manage prompts',
@@ -232,7 +232,7 @@ export const en = {
 
   'shortcuts.global': 'Global shortcuts (work from any app)',
   'shortcuts.toggleWindow': 'Show / hide NoteDesk',
-  'shortcuts.quickAsk': 'Quick Ask window',
+  'shortcuts.quickAsk': 'Ask window',
   'shortcuts.record': 'Change',
   'shortcuts.pressKeys': 'Press keys…',
   'shortcuts.invalid': 'This shortcut is taken by another app or not allowed.',

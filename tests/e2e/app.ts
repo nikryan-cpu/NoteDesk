@@ -57,3 +57,16 @@ export async function shortcut(app: ElectronApplication, keyCode: string, modifi
 }
 
 export const modifier = process.platform === 'darwin' ? 'meta' : 'control'
+
+/** Opens the Ask window and returns its page. */
+export async function openAsk(run: Running): Promise<Page> {
+  const isAsk = (p: Page) => /\/renderer\/quick\.html$/.test(p.url())
+  const existing = run.app.windows().find(isAsk)
+  await run.shell.evaluate(() => {
+    const nd = (window as unknown as { nd: { invoke(channel: string, ...args: unknown[]): Promise<unknown> } }).nd
+    return nd.invoke('quick:action', 'show')
+  })
+  const page = existing ?? (await run.app.waitForEvent('window', { predicate: isAsk }))
+  await page.waitForSelector('textarea')
+  return page
+}

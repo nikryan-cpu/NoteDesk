@@ -66,7 +66,7 @@ export const ru: Record<I18nKey, string> = {
 
   'tray.show': 'Показать NoteDesk',
   'tray.hide': 'Скрыть NoteDesk',
-  'tray.quickAsk': 'Быстрый вопрос',
+  'tray.quickAsk': 'Спросить',
   'tray.sleepAll': 'Усыпить все вкладки',
   'tray.settings': 'Настройки',
   'tray.quit': 'Выйти из NoteDesk',
@@ -128,7 +128,7 @@ export const ru: Record<I18nKey, string> = {
   'action.shortcuts': 'Горячие клавиши',
   'action.find': 'Найти на странице',
   'action.reopenTab': 'Вернуть закрытую вкладку',
-  'action.quickAsk': 'Открыть «Быстрый вопрос»',
+  'action.quickAsk': 'Открыть окно «Спросить»',
   'action.clearHistory': 'Очистить список недавних',
   'action.prompts': 'Вставить промпт',
   'action.managePrompts': 'Управление промптами',
@@ -234,7 +234,7 @@ export const ru: Record<I18nKey, string> = {
 
   'shortcuts.global': 'Глобальные клавиши (работают из любого приложения)',
   'shortcuts.toggleWindow': 'Показать / скрыть NoteDesk',
-  'shortcuts.quickAsk': 'Окно «Быстрый вопрос»',
+  'shortcuts.quickAsk': 'Окно «Спросить»',
   'shortcuts.record': 'Изменить',
   'shortcuts.pressKeys': 'Нажмите клавиши…',
   'shortcuts.invalid': 'Это сочетание занято другим приложением или недоступно.',

@@ -313,7 +313,8 @@ export class AskEngine {
   private async ensureRuntime(page: ModelPage, adapter: ModelAdapter): Promise<void> {
     if (page.webContents.isDestroyed()) return
     try {
-      const [has] = await page.webContents.executeJavaScriptInIsolatedWorld(ASK_WORLD_ID, [{ code: HAS_RUNTIME_SCRIPT }])
+      // Resolves with the value of the last script, not an array.
+      const has: unknown = await page.webContents.executeJavaScriptInIsolatedWorld(ASK_WORLD_ID, [{ code: HAS_RUNTIME_SCRIPT }])
       if (!has) await page.webContents.executeJavaScriptInIsolatedWorld(ASK_WORLD_ID, [{ code: runtimeScript(adapter.page) }])
     } catch (err) {
       console.warn('[ask] runtime install failed', err)
@@ -325,8 +326,7 @@ export class AskEngine {
     await this.ensureRuntime(page, adapter)
     if (page.webContents.isDestroyed()) return undefined
     try {
-      const [result] = await page.webContents.executeJavaScriptInIsolatedWorld(ASK_WORLD_ID, [{ code }])
-      return result
+      return (await page.webContents.executeJavaScriptInIsolatedWorld(ASK_WORLD_ID, [{ code }])) as unknown
     } catch (err) {
       console.warn('[ask] script failed', err)
       return undefined
