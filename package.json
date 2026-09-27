@@ -1,7 +1,7 @@
 {
   "name": "notedesk",
   "productName": "NoteDesk",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Unofficial lightweight desktop app for Gemini Notebook (ex-NotebookLM) & Gemini. Not affiliated with Google.",
   "main": "out/main/index.js",
   "author": "nikryan-cpu",
@@ -23,6 +23,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "icons": "node scripts/render-icons.mjs",
+    "screenshots": "electron-vite build && node scripts/screenshots.mjs",
     "dist": "electron-vite build && electron-builder",
     "dist:win": "electron-vite build && electron-builder --win",
     "dist:mac": "electron-vite build && electron-builder --mac",
