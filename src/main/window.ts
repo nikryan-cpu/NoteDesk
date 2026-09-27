@@ -6,6 +6,7 @@ import type { LayoutInsets } from '@shared/ipc'
 import { isSafeExternal } from '@shared/services'
 import { isEffectivelyDark, solidColor, themeTokens, THEMES } from '@shared/themes'
 import { emit, setShellTarget } from './bus'
+import { resourcePath } from './paths'
 import { getSettings } from './settings'
 import { handleShortcut } from './shortcuts'
 import { readJson, writeJson } from './store'
@@ -61,7 +62,7 @@ export class MainWindow implements TabHost {
       titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
       trafficLightPosition: isMac ? { x: 14, y: 13 } : undefined,
       titleBarOverlay: isMac ? undefined : this.overlayOptions(),
-      icon: process.platform === 'linux' ? join(__dirname, '../../resources/icon.png') : undefined,
+      icon: process.platform === 'linux' ? resourcePath('icon.png') : undefined,
     })
     if (state.maximized) this.win.maximize()
 

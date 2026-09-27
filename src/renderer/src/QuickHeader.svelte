@@ -8,6 +8,7 @@
   import X from '@lucide/svelte/icons/x'
   import type { QuickState } from '@shared/ipc'
   import { translate } from '@shared/i18n'
+  import logo from './assets/logo-small.svg'
   import { THEMES, themeTokens, type ThemeId, type ThemeTokens } from '@shared/themes'
 
   let state = $state<QuickState>({ pinned: false, locale: 'en', dark: false, theme: 'minimal' })
@@ -80,13 +81,7 @@
 
 <div class="quick-header drag" role="toolbar" aria-label={translate(state.locale, 'tray.quickAsk')}>
   <div class="brand">
-    <svg class="mark" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-      <rect x="1" y="1" width="14" height="14" rx="4" fill="var(--accent)" />
-      <rect x="4.6" y="1" width="1.3" height="14" fill="var(--accent-text)" opacity="0.55" />
-      <line x1="7.6" y1="4.6" x2="12.4" y2="4.6" stroke="var(--accent-text)" stroke-width="1.3" stroke-linecap="round" />
-      <line x1="7.6" y1="7.8" x2="12.4" y2="7.8" stroke="var(--accent-text)" stroke-width="1.3" stroke-linecap="round" />
-      <line x1="7.6" y1="11" x2="10.6" y2="11" stroke="var(--accent-text)" stroke-width="1.3" stroke-linecap="round" />
-    </svg>
+    <img class="mark" src={logo} alt="" draggable="false" />
     <span class="label">{translate(state.locale, 'tray.quickAsk')}</span>
   </div>
   <div class="actions no-drag">
@@ -133,8 +128,8 @@
   }
 
   .mark {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     flex: none;
   }
 

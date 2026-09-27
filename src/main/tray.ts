@@ -1,6 +1,6 @@
 import { Menu, nativeImage, Tray } from 'electron'
-import { join } from 'node:path'
 import { t } from './i18n'
+import { resourcePath } from './paths'
 
 export interface TrayActions {
   toggle(): void
@@ -16,10 +16,9 @@ let tray: Tray | null = null
 let actions: TrayActions | null = null
 
 function iconPath(): string {
-  const dir = join(__dirname, '../../resources')
-  if (process.platform === 'darwin') return join(dir, 'trayTemplate.png')
-  if (process.platform === 'win32') return join(dir, 'tray.ico')
-  return join(dir, 'tray.png')
+  if (process.platform === 'darwin') return resourcePath('trayTemplate.png')
+  if (process.platform === 'win32') return resourcePath('tray.ico')
+  return resourcePath('tray.png')
 }
 
 export function createTray(a: TrayActions): Tray {

@@ -10,6 +10,7 @@
   import { closeOverlay, isDark, setSettings, ui } from '../lib/state.svelte'
   import { t, modKey } from '../lib/i18n'
   import ThemePreview from './ThemePreview.svelte'
+  import logo from '../assets/logo.svg'
 
   let step = $state(1)
   const isLast = $derived(step === 3)
@@ -38,26 +39,7 @@
     {#key step}
       <div class="step-content">
         {#if step === 1}
-          <div class="logo" aria-hidden="true">
-            <svg viewBox="0 0 64 64" width="72" height="72">
-              <defs>
-                <linearGradient id="ndLogoGrad" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" style="stop-color:var(--accent)" />
-                  <stop offset="1" style="stop-color:color-mix(in oklab, var(--accent) 82%, black 18%)" />
-                </linearGradient>
-              </defs>
-              <rect x="1" y="1" width="62" height="62" rx="16" fill="url(#ndLogoGrad)" />
-              <g stroke="var(--accent-text)" stroke-width="2.4" stroke-linecap="round" fill="none">
-                <rect x="13" y="17" width="17" height="30" rx="3" />
-                <rect x="34" y="17" width="17" height="30" rx="3" />
-                <line x1="17.5" y1="25" x2="25.5" y2="25" />
-                <line x1="17.5" y1="31" x2="24" y2="31" />
-                <line x1="17.5" y1="37" x2="25.5" y2="37" />
-                <line x1="38.5" y1="25" x2="46.5" y2="25" />
-                <line x1="38.5" y1="31" x2="45" y2="31" />
-              </g>
-            </svg>
-          </div>
+          <img class="logo" src={logo} alt="" width="84" height="84" draggable="false" />
           <h1>{t('onboarding.welcome')}</h1>
           <p class="subtitle">{t('onboarding.subtitle')}</p>
 
@@ -161,8 +143,9 @@
   }
 
   .logo {
-    margin-bottom: 18px;
-    filter: drop-shadow(0 6px 16px color-mix(in oklab, var(--accent) 35%, transparent));
+    display: block;
+    margin: -6px 0 12px;
+    filter: drop-shadow(0 8px 18px rgba(76, 29, 149, 0.28));
   }
   h1 {
     font-size: 21px;
