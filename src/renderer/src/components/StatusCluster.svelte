@@ -5,8 +5,10 @@
   import WifiOff from '@lucide/svelte/icons/wifi-off'
   import RefreshCw from '@lucide/svelte/icons/refresh-cw'
   import MemoryStick from '@lucide/svelte/icons/memory-stick'
+  import MessagesSquare from '@lucide/svelte/icons/messages-square'
   import { nd, openOverlay, openSettings, ui } from '../lib/state.svelte'
   import { t, modKey } from '../lib/i18n'
+  import { acceleratorKeys } from '../lib/shortcuts'
 
   let memMB = $state<number | null>(null)
 
@@ -16,6 +18,11 @@
     tick()
     const id = setInterval(tick, 5000)
     return () => clearInterval(id)
+  })
+
+  const askHint = $derived.by(() => {
+    const keys = acceleratorKeys(ui.settings.hotkeys.quickAsk, ui.platform)
+    return keys.length ? `${t('action.quickAsk')} (${keys.join('+')})` : t('action.quickAsk')
   })
 
   const active = $derived(ui.downloads.filter((d) => d.state === 'progressing'))
@@ -52,6 +59,10 @@
       {/if}
     </button>
   {/if}
+  <button class="pill ask" onclick={() => nd.invoke('quick:action', 'show')} title={askHint}>
+    <MessagesSquare size={13} />
+    <span>{t('tray.quickAsk')}</span>
+  </button>
   <button class="icon-btn" onclick={() => openOverlay('palette')} title="{t('shortcuts.palette')} ({modKey(ui.platform)}+K)">
     <Search size={16} />
   </button>
@@ -115,5 +126,13 @@
   }
   :global([data-density='compact']) .pill.mem span {
     display: inline;
+  }
+  .pill.ask {
+    color: var(--accent);
+    background: var(--accent-softer);
+  }
+  .pill.ask:hover {
+    background: var(--accent-soft);
+    color: var(--accent);
   }
 </style>

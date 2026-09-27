@@ -66,3 +66,12 @@ test('conversations have separate memory and survive a restart', async () => {
   await page.locator('.item-btn').filter({ hasText: 'First conversation' }).click()
   await expect(page.locator('.turn')).toHaveCount(2)
 })
+
+test('the title bar button opens the Ask window', async () => {
+  run = await launch()
+  const isAsk = (p: Page) => /\/renderer\/quick\.html$/.test(p.url())
+  const opened = run.app.waitForEvent('window', { predicate: isAsk })
+  await run.shell.locator('.titlebar .pill.ask').click()
+  const page = await opened
+  await expect(page.locator('textarea')).toBeVisible()
+})
