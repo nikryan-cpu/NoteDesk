@@ -1,0 +1,95 @@
+appId: io.github.nikryan-cpu.notedesk
+productName: NoteDesk
+copyright: Copyright © 2026 nikryan-cpu
+
+directories:
+  buildResources: build
+  output: release/${version}
+
+files:
+  - out/**
+  - resources/**
+  - package.json
+  - '!**/*.map'
+  - '!**/*.ts'
+  - '!**/*.tsbuildinfo'
+
+asar: true
+asarUnpack:
+  - resources/**
+
+protocols:
+  - name: NoteDesk
+    schemes:
+      - notedesk
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: NoteDesk
+  deleteAppDataOnUninstall: false
+  artifactName: NoteDesk-${version}-Setup.${ext}
+portable:
+  artifactName: NoteDesk-${version}-Portable.${ext}
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - universal
+  category: public.app-category.productivity
+  identity: null
+  hardenedRuntime: false
+  extendInfo:
+    NSMicrophoneUsageDescription: Gemini voice input
+dmg:
+  artifactName: NoteDesk-${version}-universal.${ext}
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  category: Office
+  synopsis: Unofficial desktop app for Gemini Notebook & Gemini
+  description: Unofficial lightweight desktop app for Gemini Notebook (ex-NotebookLM) & Gemini. Not affiliated with Google.
+  maintainer: 'nikryan-cpu <153303920+nikryan-cpu@users.noreply.github.com>'
+  desktop:
+    entry:
+      StartupWMClass: NoteDesk
+appImage:
+  artifactName: NoteDesk-${version}-${arch}.${ext}
+
+npmRebuild: false
+
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  # Builds are not signed with a certificate. Apple Silicon still refuses to run code without
+  # a valid signature, so re-sign ad hoc after the fuses are flipped (no-op off macOS).
+  resetAdHocDarwinSignature: true
+
+publish:
+  provider: github
+  owner: nikryan-cpu
+  repo: NoteDesk
+  releaseType: draft
